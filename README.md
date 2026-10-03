@@ -96,17 +96,15 @@ You don't need to download the containers, databases, or weights yourself.
    upstream docs. If you cloned without `--recurse-submodules`, run
    `git submodule update --init`.
 
-2. Write an input JSON file (see [Input format](#input-format)), or use the
-   example in `inputs/fold_input.json`.
-
-3. Submit the two jobs (data pipeline on `RM-shared`, then inference on
-   `GPU-shared`):
+2. Go to an example directory and submit its two jobs (data pipeline on
+   `RM-shared`, then inference on `GPU-shared`):
 
    ```bash
-   ./submit_af3.sh <allocation-id> inputs/fold_input.json
+   cd example1
+   ./submit_af3.sh <allocation-id>
    ```
 
-4. Watch the jobs with `squeue -u $USER`. Results are written to
+3. Watch the jobs with `squeue -u $USER`. Results are written to
    `$PROJECT/af3_output/<name>/`.
 
 ## Environment variables
@@ -134,7 +132,8 @@ For example, to use an older image and a different output directory:
 ```bash
 export AF3_IMAGE=/ocean/containers/alphafold3/singularity-alphafold3-v3.0.3.sif
 export AF3_OUTPUT_DIR=$PROJECT/af3_output_v3.0.3
-./submit_af3.sh <allocation-id> inputs/fold_input.json
+cd example1
+./submit_af3.sh <allocation-id>
 ```
 
 Write output to `$PROJECT`, not `$HOME`. Your home directory quota is small.
@@ -189,7 +188,7 @@ export APPTAINERENV_XLA_CLIENT_MEM_FRACTION=3.2
 ## Input format
 
 AlphaFold 3 takes a JSON file that describes the molecules to fold. A minimal
-single-chain protein example (`inputs/fold_input.json`):
+protein homodimer example (`example1/fold_input.json`):
 
 ```json
 {
@@ -225,18 +224,34 @@ AlphaFold 3 runs in two stages:
 The examples run each stage as its own Slurm job, so you're charged for a GPU
 only while the model runs:
 
+Each example has its own directory with everything it needs to run:
+
+| Example | Directory | What it predicts |
+| --- | --- | --- |
+| 1 | [`example1/`](example1/) | Protein homodimer (PDB 2PV7) |
+
+Each example directory contains the same four files:
+
 | File | What it does |
 | --- | --- |
+| `fold_input.json` | The input |
 | `af3_data_pipeline.sbatch` | Stage 1 on `RM-shared` (32 cores, about 60 GB of memory) with `--norun_inference` |
 | `af3_inference.sbatch` | Stage 2 on `GPU-shared` (1 GPU) with `--norun_data_pipeline` |
 | `submit_af3.sh` | Submits both jobs, with inference set to start only if stage 1 succeeds |
-| `inputs/fold_input.json` | Example input |
+
+The scripts are the same in every example; only `fold_input.json` changes. To
+fold your own input, copy an example directory and replace `fold_input.json`.
 
 ### Submit both stages
 
+From an example directory:
+
 ```bash
-./submit_af3.sh <allocation-id> inputs/fold_input.json
+./submit_af3.sh <allocation-id>
 ```
+
+To use a different input file, pass it as a second argument:
+`./submit_af3.sh <allocation-id> my_input.json`.
 
 `submit_af3.sh` reads the `name` from the input JSON and passes it to both jobs
 as `AF3_NAME`, along with `AF3_INPUT`. The inference job runs with
@@ -246,7 +261,7 @@ with reason `DependencyNeverSatisfied`; cancel it with `scancel`.
 
 ### Stage 1: data pipeline on RM-shared
 
-`af3_data_pipeline.sbatch`:
+`example1/af3_data_pipeline.sbatch`:
 
 ```bash
 #!/bin/bash
@@ -306,7 +321,7 @@ MSAs and templates. `RM-shared` gives each core about 1.9 GB of memory, so the
 
 ### Stage 2: inference on GPU-shared
 
-`af3_inference.sbatch`:
+`example1/af3_inference.sbatch`:
 
 ```bash
 #!/bin/bash
@@ -385,7 +400,8 @@ output is kept:
   `$AF3_OUTPUT_DIR/<name>/`. Resubmit only stage 2:
 
   ```bash
-  sbatch -A <allocation-id> --export=ALL,AF3_NAME=<name> af3_inference.sbatch
+  cd example1
+  sbatch -A <allocation-id> --export=ALL,AF3_NAME=2PV7 af3_inference.sbatch
   ```
 
 - **Data pipeline failed:** run `submit_af3.sh` again. Stage 1 starts over,

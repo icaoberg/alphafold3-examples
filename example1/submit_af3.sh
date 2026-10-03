@@ -2,18 +2,20 @@
 # Submit the data pipeline (RM-shared) and inference (GPU-shared) jobs for one
 # input. Inference starts only if the data pipeline succeeds.
 #
-# Usage: ./submit_af3.sh <allocation-id> <input.json>
+# Usage: ./submit_af3.sh <allocation-id> [input.json]
+#
+# The input defaults to fold_input.json in this directory.
 
 set -euo pipefail
 
-if [[ $# -ne 2 ]]; then
-  echo "Usage: $0 <allocation-id> <input.json>" >&2
+if [[ $# -lt 1 || $# -gt 2 ]]; then
+  echo "Usage: $0 <allocation-id> [input.json]" >&2
   exit 1
 fi
 
 account=$1
 here=$(dirname "$(realpath "$0")")
-export AF3_INPUT=$(realpath "$2")
+export AF3_INPUT=$(realpath "${2:-$here/fold_input.json}")
 
 # AlphaFold 3 names the output directory after the input's "name", with spaces
 # replaced by underscores and characters other than [A-Za-z0-9_.-] removed.
