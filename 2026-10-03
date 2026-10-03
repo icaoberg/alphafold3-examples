@@ -1,0 +1,28 @@
+# 2026-10-03 — First AF3 test on Bridges-2
+
+## Goal
+Verify Ivan's AF3 deployment runs end to end on a V100 node.
+
+## Locations
+- Containers: /ocean/containers/alphafold3/singularity-alphafold3-v3.0.{0-4}.sif (using v3.0.4)
+- Code: /ocean/datasets/community/alphafold3/code/alphafold3
+- Databases: /ocean/datasets/community/alphafold3/databases
+- Weights: my own copy at $PROJECT/af3_weights/af3.bin.zst (direct downloaded from Google, accepted terms)
+
+## Steps
+1. `interact -p GPU-shared --gres=gpu:v100-32:1` → node v022, V100-32GB
+2. Copied examples/ubiquitin_monomer.json to $PROJECT/af3_runs/input
+3. Ran run_alphafold.py inside the v3.0.4 image with V100 flags
+   (`--flash_attention_implementation=xla`, XLA_FLAGS custom-kernel-fusion-rewriter)
+
+## Observations
+- First run (stopped, was using shared weights): jackhmmer uniref90 273 s, uniprot 434 s
+- Learned each user needs their own weights; request form retired, direct download now
+- Second run started 15:09 with own weights — in progress
+
+## Results
+TBD
+
+## Next
+- Validate prediction against PDB 1UBQ
+- Later: copy databases to $LOCAL at job start for repeated runs (Ivan's idea)
