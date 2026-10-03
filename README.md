@@ -116,7 +116,8 @@ one place.
 | `AF3_MODEL_DIR` | `$AF3_ROOT/weights` | Passed to `--model_dir` |
 | `AF3_INPUT` | *(none)* | Input JSON file (`--json_path`) or directory (`--input_dir`) |
 | `AF3_OUTPUT_DIR` | `$PROJECT/af3_output` | Passed to `--output_dir` |
-| `AF3_JAX_CACHE_DIR` | `$PROJECT/.cache/af3_jax` | Passed to `--jax_compilation_cache_dir` |
+| `AF3_JAX_CACHE_DIR` | `$LOCAL/af3/jax_cache` | Passed to `--jax_compilation_cache_dir` |
+| `AF3_SCRATCH` | `$LOCAL/af3` | Node-local scratch for temporary files and in-progress output (batch jobs only) |
 
 ```bash
 export AF3_ROOT=/ocean/datasets/community/alphafold3
@@ -125,12 +126,18 @@ export AF3_DB_DIR=$AF3_ROOT/databases
 export AF3_MODEL_DIR=$AF3_ROOT/weights
 export AF3_INPUT=$PWD/inputs/fold_input.json
 export AF3_OUTPUT_DIR=$PROJECT/af3_output
-export AF3_JAX_CACHE_DIR=$PROJECT/.cache/af3_jax
+export AF3_JAX_CACHE_DIR=$LOCAL/af3/jax_cache
 mkdir -p "$AF3_OUTPUT_DIR" "$AF3_JAX_CACHE_DIR"
 ```
 
-Write output and the cache to `$PROJECT` or `$LOCAL`, not `$HOME`. Your home
-directory quota is small.
+Write output to `$PROJECT`, not `$HOME`. Your home directory quota is small.
+
+`$LOCAL` is fast disk on the compute node your job runs on. It exists only
+while the job runs and is deleted when the job ends, so the batch example below
+uses it for scratch and the JAX compilation cache, and copies the results to
+`$PROJECT` before the job exits. Because the cache is deleted with the job, each
+new job compiles the model again (usually a few minutes). To reuse compiled
+models across jobs, set `AF3_JAX_CACHE_DIR=$PROJECT/.cache/af3_jax` instead.
 
 ### Variables read by JAX/XLA inside the container
 
@@ -232,8 +239,18 @@ export AF3_IMAGE=${AF3_IMAGE:-/ocean/containers/alphafold3/singularity-alphafold
 export AF3_DB_DIR=${AF3_DB_DIR:-$AF3_ROOT/databases}
 export AF3_MODEL_DIR=${AF3_MODEL_DIR:-$AF3_ROOT/weights}
 export AF3_OUTPUT_DIR=${AF3_OUTPUT_DIR:-$PROJECT/af3_output}
-export AF3_JAX_CACHE_DIR=${AF3_JAX_CACHE_DIR:-$PROJECT/.cache/af3_jax}
-mkdir -p "$AF3_OUTPUT_DIR" "$AF3_JAX_CACHE_DIR"
+mkdir -p "$AF3_OUTPUT_DIR"
+
+# Node-local scratch and JAX cache. $LOCAL is deleted when the job ends.
+export AF3_SCRATCH=${AF3_SCRATCH:-$LOCAL/af3}
+export AF3_JAX_CACHE_DIR=${AF3_JAX_CACHE_DIR:-$AF3_SCRATCH/jax_cache}
+mkdir -p "$AF3_SCRATCH/output" "$AF3_SCRATCH/tmp" "$AF3_JAX_CACHE_DIR"
+
+# Copy results from $LOCAL to $PROJECT when the script exits, even on failure.
+trap 'rsync -a "$AF3_SCRATCH/output/" "$AF3_OUTPUT_DIR/"' EXIT
+
+# Send temporary files from the MSA tools to $LOCAL instead of /tmp.
+export APPTAINERENV_TMPDIR="$AF3_SCRATCH/tmp"
 
 # Required on V100 (CUDA compute capability 7.0). Remove on H100/L40S.
 export APPTAINERENV_XLA_FLAGS="--xla_disable_hlo_passes=custom-kernel-fusion-rewriter"
@@ -241,15 +258,23 @@ export APPTAINERENV_XLA_FLAGS="--xla_disable_hlo_passes=custom-kernel-fusion-rew
 apptainer exec --nv \
   --bind /ocean \
   --bind "$PROJECT" \
+  --bind "$LOCAL" \
   "$AF3_IMAGE" \
   python /app/alphafold/run_alphafold.py \
     --json_path="$AF3_INPUT" \
     --db_dir="$AF3_DB_DIR" \
     --model_dir="$AF3_MODEL_DIR" \
-    --output_dir="$AF3_OUTPUT_DIR" \
+    --output_dir="$AF3_SCRATCH/output" \
     --jax_compilation_cache_dir="$AF3_JAX_CACHE_DIR" \
     --flash_attention_implementation=xla
 ```
+
+AlphaFold 3 writes to `$AF3_SCRATCH/output` on the node's local disk while it
+runs, and the `trap` copies everything to `$AF3_OUTPUT_DIR` when the script
+exits. If the job hits its time limit, Slurm allows only a short grace period
+before killing it, so set `--time` with some margin. You can use the same
+`$LOCAL` setup (`--bind "$LOCAL"`, `APPTAINERENV_TMPDIR`, the JAX cache, and the `trap`) in the
+split-job scripts below.
 
 ### Split job: data pipeline on CPU, then inference on GPU
 
@@ -355,7 +380,7 @@ for how to interpret the confidence metrics.
 | Wrong or `NaN` structures on V100 | Set `XLA_FLAGS` with `--env` or `APPTAINERENV_` (see the [warning above](#variables-read-by-jaxxla-inside-the-container)) and use `--flash_attention_implementation=xla` |
 | `RESOURCE_EXHAUSTED` / out of GPU memory | Enable [unified memory](#unified-memory-large-inputs-or-small-gpus), or use an H100 node |
 | Triton/cuDNN attention errors | The GPU is older than Ampere; use `--flash_attention_implementation=xla` |
-| Long time before inference starts | First-run JAX compilation. Set `--jax_compilation_cache_dir` so later runs reuse it |
+| Long time before inference starts | JAX compiles the model at the start of each job when the cache is on `$LOCAL`. Point `AF3_JAX_CACHE_DIR` at `$PROJECT` so later jobs reuse it |
 | Data pipeline takes hours on a GPU node | Split the job and run the data pipeline on `RM-shared` |
 | `No such file or directory` for `/ocean/...` inside the container | Add `--bind /ocean` (and `--bind $PROJECT`) to `apptainer exec` ([bind paths docs](https://apptainer.org/docs/user/latest/bind_paths_and_mounts.html)) |
 | Disk quota exceeded | Write outputs and caches to `$PROJECT`, not `$HOME` |
