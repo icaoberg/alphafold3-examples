@@ -8,6 +8,8 @@
 
 # Stage 2: predict the structure from the stage 1 output (one GPU).
 # Submit with submit_af3.sh, which sets AF3_NAME.
+# submit_af3.sh passes its own Slurm options, which take precedence over the
+# #SBATCH lines above. These lines apply when you run sbatch on this file directly.
 
 set -euo pipefail
 

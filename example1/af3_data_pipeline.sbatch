@@ -7,6 +7,8 @@
 
 # Stage 1: build MSAs and find templates (CPU only).
 # Submit with submit_af3.sh, which sets AF3_INPUT and AF3_NAME.
+# submit_af3.sh passes its own Slurm options, which take precedence over the
+# #SBATCH lines above. These lines apply when you run sbatch on this file directly.
 
 set -euo pipefail
 

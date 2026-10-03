@@ -254,10 +254,77 @@ To use a different input file, pass it as a second argument:
 `./submit_af3.sh <allocation-id> my_input.json`.
 
 `submit_af3.sh` reads the `name` from the input JSON and passes it to both jobs
-as `AF3_NAME`, along with `AF3_INPUT`. The inference job runs with
+as `AF3_NAME`, along with `AF3_INPUT`. It also sets every Slurm option for both
+jobs (partition, cores, GPU, time limit, and output file) on the `sbatch`
+command line, so you can see and change them in one place. Command-line options
+take precedence over the `#SBATCH` lines in the job scripts; those lines apply
+only when you run `sbatch` on a job script directly. The inference job runs with
 `--dependency=afterok`, so it starts only after the data pipeline finishes
 without errors. If the data pipeline fails, the inference job stays pending
 with reason `DependencyNeverSatisfied`; cancel it with `scancel`.
+
+`example1/submit_af3.sh`:
+
+```bash
+#!/bin/bash
+# Submit the data pipeline (RM-shared) and inference (GPU-shared) jobs for one
+# input. Inference starts only if the data pipeline succeeds.
+#
+# Usage: ./submit_af3.sh <allocation-id> [input.json]
+#
+# The input defaults to fold_input.json in this directory.
+
+set -euo pipefail
+
+if [[ $# -lt 1 || $# -gt 2 ]]; then
+  echo "Usage: $0 <allocation-id> [input.json]" >&2
+  exit 1
+fi
+
+account=$1
+here=$(dirname "$(realpath "$0")")
+export AF3_INPUT=$(realpath "${2:-$here/fold_input.json}")
+
+# AlphaFold 3 names the output directory after the input's "name", with spaces
+# replaced by underscores and characters other than [A-Za-z0-9_.-] removed.
+export AF3_NAME=$(python3 -c '
+import json, re, sys
+name = json.load(open(sys.argv[1]))["name"].replace(" ", "_")
+print(re.sub(r"[^A-Za-z0-9_.-]", "", name))
+' "$AF3_INPUT")
+
+# Slurm options for both jobs. Options given to sbatch on the command line take
+# precedence over the #SBATCH lines inside the job scripts, so edit them here.
+
+# Stage 1: data pipeline on CPUs.
+data_jid=$(sbatch --parsable \
+  --account="$account" \
+  --job-name=af3-data \
+  --partition=RM-shared \
+  --ntasks-per-node=32 \
+  --time=12:00:00 \
+  --output=af3-data-%j.out \
+  --export=ALL \
+  "$here/af3_data_pipeline.sbatch")
+
+# Stage 2: inference on one GPU. Starts only if stage 1 succeeds.
+infer_jid=$(sbatch --parsable \
+  --account="$account" \
+  --job-name=af3-inference \
+  --partition=GPU-shared \
+  --gpus=v100-32:1 \
+  --ntasks-per-node=5 \
+  --time=02:00:00 \
+  --output=af3-inference-%j.out \
+  --dependency=afterok:"$data_jid" \
+  --export=ALL \
+  "$here/af3_inference.sbatch")
+
+echo "Input:         $AF3_INPUT"
+echo "Data pipeline: job $data_jid"
+echo "Inference:     job $infer_jid (starts after $data_jid succeeds)"
+echo "Results:       ${AF3_OUTPUT_DIR:-$PROJECT/af3_output}/$AF3_NAME"
+```
 
 ### Stage 1: data pipeline on RM-shared
 
@@ -273,6 +340,8 @@ with reason `DependencyNeverSatisfied`; cancel it with `scancel`.
 
 # Stage 1: build MSAs and find templates (CPU only).
 # Submit with submit_af3.sh, which sets AF3_INPUT and AF3_NAME.
+# submit_af3.sh passes its own Slurm options, which take precedence over the
+# #SBATCH lines above. These lines apply when you run sbatch on this file directly.
 
 set -euo pipefail
 
@@ -334,6 +403,8 @@ MSAs and templates. `RM-shared` gives each core about 1.9 GB of memory, so the
 
 # Stage 2: predict the structure from the stage 1 output (one GPU).
 # Submit with submit_af3.sh, which sets AF3_NAME.
+# submit_af3.sh passes its own Slurm options, which take precedence over the
+# #SBATCH lines above. These lines apply when you run sbatch on this file directly.
 
 set -euo pipefail
 
@@ -383,7 +454,7 @@ apptainer exec --nv \
 ```
 
 The script checks which GPU it got and sets the V100 workarounds only when it
-needs them, so you can change `--gpus` to `l40s-48:1` or `h100-80:1` without
+needs them, so you can change `--gpus` in `submit_af3.sh` to `l40s-48:1` or `h100-80:1` without
 editing anything else.
 
 Both stages write to `$AF3_SCRATCH` on the node's local disk while they run,
@@ -406,7 +477,7 @@ output is kept:
 
 - **Data pipeline failed:** run `submit_af3.sh` again. Stage 1 starts over,
   because the data pipeline saves nothing until it finishes. If it ran out of
-  time, increase `--time` in `af3_data_pipeline.sbatch`.
+  time, increase `--time` for stage 1 in `submit_af3.sh`.
 
 Running `submit_af3.sh` again after stage 1 has finished is also safe: the
 data pipeline job sees the existing `_data.json`, exits right away, and the
