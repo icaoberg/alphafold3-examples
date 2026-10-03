@@ -27,6 +27,12 @@ Slurm batch scripts you can copy and adapt.
 
 ## What is on Bridges-2
 
+| Resource | Location |
+| --- | --- |
+| Containers | `/ocean/containers/alphafold3` |
+| Databases | `/ocean/datasets/community/alphafold3/databases` |
+| Weights | `/ocean/datasets/community/alphafold3/weights` |
+
 PSC keeps a shared AlphaFold 3 installation under
 `/ocean/datasets/community/alphafold3`:
 
