@@ -6,10 +6,10 @@
 #SBATCH --time=02:00:00
 #SBATCH --output=%x-%j.out
 
-# Stage 2: predict the structure from the stage 1 output (one GPU).
-# Submit with submit_af3.sh, which sets AF3_NAME.
-# submit_af3.sh passes its own Slurm options, which take precedence over the
-# #SBATCH lines above. These lines apply when you run sbatch on this file directly.
+# Stage 2 of 2: predict the structure from the stage 1 output on one GPU.
+# submit_af3.sh submits this job when stage 1 finishes and sets AF3_NAME.
+# To run only this stage (for example, after an inference failure):
+#   sbatch -A <allocation-id> --export=ALL,AF3_NAME=<name> af3_inference.sbatch
 
 set -euo pipefail
 
@@ -22,7 +22,7 @@ export AF3_OUTPUT_DIR=${AF3_OUTPUT_DIR:-$PROJECT/af3_output}
 export AF3_DATA_JSON=${AF3_DATA_JSON:-$AF3_OUTPUT_DIR/$AF3_NAME/${AF3_NAME}_data.json}
 
 if [[ ! -f "$AF3_DATA_JSON" ]]; then
-  echo "Missing $AF3_DATA_JSON. Run af3_data_pipeline.sbatch first." >&2
+  echo "Missing $AF3_DATA_JSON. Run submit_af3.sh first." >&2
   exit 1
 fi
 

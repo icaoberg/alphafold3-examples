@@ -96,12 +96,13 @@ You don't need to download the containers, databases, or weights yourself.
    upstream docs. If you cloned without `--recurse-submodules`, run
    `git submodule update --init`.
 
-2. Go to an example directory and submit its two jobs (data pipeline on
-   `RM-shared`, then inference on `GPU-shared`):
+2. Go to an example directory and submit stage 1 (data pipeline on
+   `RM-shared`). When it finishes, it submits stage 2 (inference on
+   `GPU-shared`) for you:
 
    ```bash
    cd example1
-   ./submit_af3.sh <allocation-id>
+   sbatch -A <allocation-id> submit_af3.sh
    ```
 
 3. Watch the jobs with `squeue -u $USER`. Results are written to
@@ -110,8 +111,9 @@ You don't need to download the containers, databases, or weights yourself.
 ## Environment variables
 
 The job scripts read these environment variables and fall back to the defaults
-below. `submit_af3.sh` submits with `--export=ALL`, so any of them you export
-before running it are passed to both jobs.
+below. `sbatch` passes your environment to the job, and `submit_af3.sh`
+submits stage 2 with `--export=ALL`, so any of them you export before
+submitting are used by both stages.
 
 ### Paths used by the examples
 
@@ -133,7 +135,7 @@ For example, to use an older image and a different output directory:
 export AF3_IMAGE=/ocean/containers/alphafold3/singularity-alphafold3-v3.0.3.sif
 export AF3_OUTPUT_DIR=$PROJECT/af3_output_v3.0.3
 cd example1
-./submit_af3.sh <allocation-id>
+sbatch -A <allocation-id> submit_af3.sh
 ```
 
 Write output to `$PROJECT`, not `$HOME`. Your home directory quota is small.
@@ -222,7 +224,8 @@ AlphaFold 3 runs in two stages:
 2. **Inference (GPU).** Runs the model on the features from stage 1.
 
 The examples run each stage as its own Slurm job, so you're charged for a GPU
-only while the model runs:
+only while the model runs. Stage 1 runs on `RM-shared` and, when it finishes,
+submits stage 2 to `GPU-shared`.
 
 Each example has its own directory with everything it needs to run:
 
@@ -230,105 +233,43 @@ Each example has its own directory with everything it needs to run:
 | --- | --- | --- |
 | 1 | [`example1/`](example1/) | Protein homodimer (PDB 2PV7) |
 
-Each example directory contains the same four files:
+Each example directory contains the same three files:
 
 | File | What it does |
 | --- | --- |
 | `fold_input.json` | The input |
-| `af3_data_pipeline.sbatch` | Stage 1 on `RM-shared` (32 cores, about 60 GB of memory) with `--norun_inference` |
-| `af3_inference.sbatch` | Stage 2 on `GPU-shared` (1 GPU) with `--norun_data_pipeline` |
-| `submit_af3.sh` | Submits both jobs, with inference set to start only if stage 1 succeeds |
+| `submit_af3.sh` | Stage 1 job on `RM-shared`: runs the data pipeline (`--norun_inference`), then submits `af3_inference.sbatch` |
+| `af3_inference.sbatch` | Stage 2 job on `GPU-shared` (1 GPU): runs inference (`--norun_data_pipeline`) |
 
 The scripts are the same in every example; only `fold_input.json` changes. To
 fold your own input, copy an example directory and replace `fold_input.json`.
 
-### Submit both stages
+### Submit
 
 From an example directory:
 
 ```bash
-./submit_af3.sh <allocation-id>
+sbatch -A <allocation-id> submit_af3.sh
 ```
 
-To use a different input file, pass it as a second argument:
-`./submit_af3.sh <allocation-id> my_input.json`.
+To use a different input file, pass it as an argument:
+`sbatch -A <allocation-id> submit_af3.sh my_input.json`.
 
-`submit_af3.sh` reads the `name` from the input JSON and passes it to both jobs
-as `AF3_NAME`, along with `AF3_INPUT`. It also sets every Slurm option for both
-jobs (partition, cores, GPU, time limit, and output file) on the `sbatch`
-command line, so you can see and change them in one place. Command-line options
-take precedence over the `#SBATCH` lines in the job scripts; those lines apply
-only when you run `sbatch` on a job script directly. The inference job runs with
-`--dependency=afterok`, so it starts only after the data pipeline finishes
-without errors. If the data pipeline fails, the inference job stays pending
-with reason `DependencyNeverSatisfied`; cancel it with `scancel`.
+That one command runs both stages:
 
-`example1/submit_af3.sh`:
+1. `submit_af3.sh` starts on `RM-shared`, reads the `name` from the input JSON,
+   and runs the data pipeline.
+2. It copies `<name>/<name>_data.json` to `$AF3_OUTPUT_DIR`.
+3. It submits `af3_inference.sbatch` to `GPU-shared` with the same allocation
+   (`$SLURM_JOB_ACCOUNT`), passing `AF3_NAME` and any `AF3_*` variables you
+   exported.
 
-```bash
-#!/bin/bash
-# Submit the data pipeline (RM-shared) and inference (GPU-shared) jobs for one
-# input. Inference starts only if the data pipeline succeeds.
-#
-# Usage: ./submit_af3.sh <allocation-id> [input.json]
-#
-# The input defaults to fold_input.json in this directory.
-
-set -euo pipefail
-
-if [[ $# -lt 1 || $# -gt 2 ]]; then
-  echo "Usage: $0 <allocation-id> [input.json]" >&2
-  exit 1
-fi
-
-account=$1
-here=$(dirname "$(realpath "$0")")
-export AF3_INPUT=$(realpath "${2:-$here/fold_input.json}")
-
-# AlphaFold 3 names the output directory after the input's "name", with spaces
-# replaced by underscores and characters other than [A-Za-z0-9_.-] removed.
-export AF3_NAME=$(python3 -c '
-import json, re, sys
-name = json.load(open(sys.argv[1]))["name"].replace(" ", "_")
-print(re.sub(r"[^A-Za-z0-9_.-]", "", name))
-' "$AF3_INPUT")
-
-# Slurm options for both jobs. Options given to sbatch on the command line take
-# precedence over the #SBATCH lines inside the job scripts, so edit them here.
-
-# Stage 1: data pipeline on CPUs.
-data_jid=$(sbatch --parsable \
-  --account="$account" \
-  --job-name=af3-data \
-  --partition=RM-shared \
-  --ntasks-per-node=32 \
-  --time=12:00:00 \
-  --output=af3-data-%j.out \
-  --export=ALL \
-  "$here/af3_data_pipeline.sbatch")
-
-# Stage 2: inference on one GPU. Starts only if stage 1 succeeds.
-infer_jid=$(sbatch --parsable \
-  --account="$account" \
-  --job-name=af3-inference \
-  --partition=GPU-shared \
-  --gpus=v100-32:1 \
-  --ntasks-per-node=5 \
-  --time=02:00:00 \
-  --output=af3-inference-%j.out \
-  --dependency=afterok:"$data_jid" \
-  --export=ALL \
-  "$here/af3_inference.sbatch")
-
-echo "Input:         $AF3_INPUT"
-echo "Data pipeline: job $data_jid"
-echo "Inference:     job $infer_jid (starts after $data_jid succeeds)"
-echo "Results:       ${AF3_OUTPUT_DIR:-$PROJECT/af3_output}/$AF3_NAME"
-```
+If the data pipeline fails, `submit_af3.sh` stops before step 3, so no GPU job
+is submitted.
 
 ### Stage 1: data pipeline on RM-shared
 
-`example1/af3_data_pipeline.sbatch`:
+`example1/submit_af3.sh`:
 
 ```bash
 #!/bin/bash
@@ -338,15 +279,19 @@ echo "Results:       ${AF3_OUTPUT_DIR:-$PROJECT/af3_output}/$AF3_NAME"
 #SBATCH --time=12:00:00
 #SBATCH --output=%x-%j.out
 
-# Stage 1: build MSAs and find templates (CPU only).
-# Submit with submit_af3.sh, which sets AF3_INPUT and AF3_NAME.
-# submit_af3.sh passes its own Slurm options, which take precedence over the
-# #SBATCH lines above. These lines apply when you run sbatch on this file directly.
+# Stage 1 of 2: build MSAs and find templates on RM-shared (CPU only), then
+# submit stage 2 (af3_inference.sbatch) to GPU-shared.
+#
+# Usage, from this directory:
+#   sbatch -A <allocation-id> submit_af3.sh [input.json]
+#
+# The input defaults to fold_input.json in the directory you submit from.
+#
+# RM-shared (Bridges-2 User Guide): 2 GB of memory per core requested, up to
+# 64 cores on one node, 1-hour default and 72-hour maximum time limit. The 32
+# cores requested above give the MSA search tools about 64 GB of memory.
 
 set -euo pipefail
-
-: "${AF3_INPUT:?Set AF3_INPUT to the input JSON file}"
-: "${AF3_NAME:?Set AF3_NAME to the job name from the input JSON}"
 
 export AF3_ROOT=/ocean/datasets/community/alphafold3
 export AF3_IMAGE=${AF3_IMAGE:-/ocean/containers/alphafold3/singularity-alphafold3-v3.0.4.sif}
@@ -354,39 +299,72 @@ export AF3_DB_DIR=${AF3_DB_DIR:-$AF3_ROOT/databases}
 export AF3_OUTPUT_DIR=${AF3_OUTPUT_DIR:-$PROJECT/af3_output}
 mkdir -p "$AF3_OUTPUT_DIR"
 
+# Slurm runs a copy of this script, so find files relative to the directory
+# the job was submitted from.
+export AF3_INPUT=$(realpath "${1:-$SLURM_SUBMIT_DIR/fold_input.json}")
+
+# AlphaFold 3 names the output directory after the input's "name", with spaces
+# replaced by underscores and characters other than [A-Za-z0-9_.-] removed.
+export AF3_NAME=$(apptainer exec "$AF3_IMAGE" python3 -c '
+import json, re, sys
+name = json.load(open(sys.argv[1]))["name"].replace(" ", "_")
+print(re.sub(r"[^A-Za-z0-9_.-]", "", name))
+' "$AF3_INPUT")
+
+data_json="$AF3_OUTPUT_DIR/$AF3_NAME/${AF3_NAME}_data.json"
+
+echo "Input:  $AF3_INPUT"
+echo "Output: $AF3_OUTPUT_DIR/$AF3_NAME"
+
 # Skip the data pipeline if an earlier job already finished it.
-if [[ -f "$AF3_OUTPUT_DIR/$AF3_NAME/${AF3_NAME}_data.json" ]]; then
-  echo "Found $AF3_OUTPUT_DIR/$AF3_NAME/${AF3_NAME}_data.json; skipping the data pipeline."
-  exit 0
+if [[ -f "$data_json" ]]; then
+  echo "Found $data_json; skipping the data pipeline."
+else
+  # Node-local scratch. $LOCAL is deleted when the job ends.
+  export AF3_SCRATCH=${AF3_SCRATCH:-$LOCAL/af3}
+  mkdir -p "$AF3_SCRATCH/output" "$AF3_SCRATCH/tmp"
+
+  # If the data pipeline fails, still copy whatever it wrote to $PROJECT.
+  trap 'rsync -a "$AF3_SCRATCH/output/" "$AF3_OUTPUT_DIR/"' EXIT
+
+  # Send temporary files from the MSA tools to $LOCAL instead of /tmp.
+  export APPTAINERENV_TMPDIR="$AF3_SCRATCH/tmp"
+
+  apptainer exec \
+    --bind /ocean \
+    --bind "$PROJECT" \
+    --bind "$LOCAL" \
+    "$AF3_IMAGE" \
+    python /app/alphafold/run_alphafold.py \
+      --json_path="$AF3_INPUT" \
+      --db_dir="$AF3_DB_DIR" \
+      --output_dir="$AF3_SCRATCH/output" \
+      --jackhmmer_n_cpu=8 \
+      --nhmmer_n_cpu=8 \
+      --norun_inference
+
+  # Copy the results to $PROJECT now, so they're there before stage 2 starts.
+  rsync -a "$AF3_SCRATCH/output/" "$AF3_OUTPUT_DIR/"
 fi
 
-# Node-local scratch. $LOCAL is deleted when the job ends.
-export AF3_SCRATCH=${AF3_SCRATCH:-$LOCAL/af3}
-mkdir -p "$AF3_SCRATCH/output" "$AF3_SCRATCH/tmp"
-
-# Copy results from $LOCAL to $PROJECT when the script exits, even on failure.
-trap 'rsync -a "$AF3_SCRATCH/output/" "$AF3_OUTPUT_DIR/"' EXIT
-
-# Send temporary files from the MSA tools to $LOCAL instead of /tmp.
-export APPTAINERENV_TMPDIR="$AF3_SCRATCH/tmp"
-
-apptainer exec \
-  --bind /ocean \
-  --bind "$PROJECT" \
-  --bind "$LOCAL" \
-  "$AF3_IMAGE" \
-  python /app/alphafold/run_alphafold.py \
-    --json_path="$AF3_INPUT" \
-    --db_dir="$AF3_DB_DIR" \
-    --output_dir="$AF3_SCRATCH/output" \
-    --jackhmmer_n_cpu=8 \
-    --nhmmer_n_cpu=8 \
-    --norun_inference
+# Stage 2: submit inference to GPU-shared, charged to the same allocation.
+# Its Slurm options are the #SBATCH lines in af3_inference.sbatch.
+sbatch \
+  --account="$SLURM_JOB_ACCOUNT" \
+  --export=ALL \
+  "$SLURM_SUBMIT_DIR/af3_inference.sbatch"
 ```
 
-This writes `<name>/<name>_data.json` to `$AF3_OUTPUT_DIR`. That file holds the
-MSAs and templates. `RM-shared` gives each core about 1.9 GB of memory, so the
-32 cores also give the MSA search tools about 60 GB.
+From the [Bridges-2 User Guide](https://www.psc.edu/resources/bridges-2/user-guide/),
+`RM-shared` jobs:
+
+- get 2 GB of memory for each core requested with `--ntasks-per-node`;
+- can use up to 64 cores, on a single node;
+- have a 1-hour default time limit and a 72-hour maximum.
+
+The script asks for 32 cores, which gives the MSA search tools about 64 GB of
+memory, and 12 hours. For very large inputs, raise `--ntasks-per-node` (up to
+64) for more memory, and `--time` (up to `72:00:00`).
 
 ### Stage 2: inference on GPU-shared
 
@@ -401,10 +379,10 @@ MSAs and templates. `RM-shared` gives each core about 1.9 GB of memory, so the
 #SBATCH --time=02:00:00
 #SBATCH --output=%x-%j.out
 
-# Stage 2: predict the structure from the stage 1 output (one GPU).
-# Submit with submit_af3.sh, which sets AF3_NAME.
-# submit_af3.sh passes its own Slurm options, which take precedence over the
-# #SBATCH lines above. These lines apply when you run sbatch on this file directly.
+# Stage 2 of 2: predict the structure from the stage 1 output on one GPU.
+# submit_af3.sh submits this job when stage 1 finishes and sets AF3_NAME.
+# To run only this stage (for example, after an inference failure):
+#   sbatch -A <allocation-id> --export=ALL,AF3_NAME=<name> af3_inference.sbatch
 
 set -euo pipefail
 
@@ -417,7 +395,7 @@ export AF3_OUTPUT_DIR=${AF3_OUTPUT_DIR:-$PROJECT/af3_output}
 export AF3_DATA_JSON=${AF3_DATA_JSON:-$AF3_OUTPUT_DIR/$AF3_NAME/${AF3_NAME}_data.json}
 
 if [[ ! -f "$AF3_DATA_JSON" ]]; then
-  echo "Missing $AF3_DATA_JSON. Run af3_data_pipeline.sbatch first." >&2
+  echo "Missing $AF3_DATA_JSON. Run submit_af3.sh first." >&2
   exit 1
 fi
 
@@ -454,13 +432,13 @@ apptainer exec --nv \
 ```
 
 The script checks which GPU it got and sets the V100 workarounds only when it
-needs them, so you can change `--gpus` in `submit_af3.sh` to `l40s-48:1` or `h100-80:1` without
+needs them, so you can change `--gpus` to `l40s-48:1` or `h100-80:1` without
 editing anything else.
 
-Both stages write to `$AF3_SCRATCH` on the node's local disk while they run,
-and the `trap` copies the results to `$AF3_OUTPUT_DIR` when the script exits.
-If a job hits its time limit, Slurm allows only a short grace period before
-killing it, so set `--time` with some margin.
+Both stages write to `$AF3_SCRATCH` on the node's local disk while they run and
+copy the results to `$AF3_OUTPUT_DIR`. If a job hits its time limit, Slurm
+allows only a short grace period before killing it, so set `--time` with some
+margin.
 
 ### Resuming after a failure
 
@@ -475,13 +453,13 @@ output is kept:
   sbatch -A <allocation-id> --export=ALL,AF3_NAME=2PV7 af3_inference.sbatch
   ```
 
-- **Data pipeline failed:** run `submit_af3.sh` again. Stage 1 starts over,
+- **Data pipeline failed:** submit `submit_af3.sh` again. Stage 1 starts over,
   because the data pipeline saves nothing until it finishes. If it ran out of
-  time, increase `--time` for stage 1 in `submit_af3.sh`.
+  time, increase `--time` in `submit_af3.sh`.
 
-Running `submit_af3.sh` again after stage 1 has finished is also safe: the
-data pipeline job sees the existing `_data.json`, exits right away, and the
-inference job starts.
+Submitting `submit_af3.sh` again after stage 1 has finished is also safe: it
+sees the existing `_data.json`, skips the data pipeline, and submits stage 2
+right away.
 
 ### Useful `run_alphafold.py` flags
 
@@ -547,7 +525,7 @@ for how to interpret the confidence metrics.
 | `RESOURCE_EXHAUSTED` / out of GPU memory | Enable [unified memory](#unified-memory-large-inputs-or-small-gpus), or use an H100 node |
 | Triton/cuDNN attention errors | The GPU is older than Ampere; use `--flash_attention_implementation=xla` |
 | Long time before inference starts | JAX compiles the model at the start of each job when the cache is on `$LOCAL`. Point `AF3_JAX_CACHE_DIR` at `$PROJECT` so later jobs reuse it |
-| Inference job stuck in `PD` with `DependencyNeverSatisfied` | The data pipeline job failed. Check its `af3-data-<jobid>.out`, cancel the inference job, fix the problem, and run `submit_af3.sh` again |
+| No `af3-inference` job after `af3-data` finished | The data pipeline failed, so stage 2 wasn't submitted. Check `af3-data-<jobid>.out`, fix the problem, and submit `submit_af3.sh` again |
 | `No such file or directory` for `/ocean/...` inside the container | Add `--bind /ocean` (and `--bind $PROJECT`) to `apptainer exec` ([bind paths docs](https://apptainer.org/docs/user/latest/bind_paths_and_mounts.html)) |
 | Disk quota exceeded | Write outputs and caches to `$PROJECT`, not `$HOME` |
 

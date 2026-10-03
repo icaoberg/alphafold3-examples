@@ -10,16 +10,15 @@ upstream AlphaFold 3 documentation.
 | File | What it does |
 | --- | --- |
 | `fold_input.json` | Input: one protein sequence, used for chains `A` and `B` |
-| `af3_data_pipeline.sbatch` | Stage 1: builds MSAs and finds templates on `RM-shared` (CPU only) |
-| `af3_inference.sbatch` | Stage 2: predicts the structure on `GPU-shared` (one GPU) |
-| `submit_af3.sh` | Submits stage 1, then stage 2 to start only if stage 1 succeeds |
+| `submit_af3.sh` | Stage 1 on `RM-shared` (CPU only): builds MSAs and finds templates, then submits stage 2 |
+| `af3_inference.sbatch` | Stage 2 on `GPU-shared` (one GPU): predicts the structure |
 
 ## Run it
 
 From this directory:
 
 ```bash
-./submit_af3.sh <allocation-id>
+sbatch -A <allocation-id> submit_af3.sh
 ```
 
 Watch the jobs with `squeue -u $USER`. Results are written to
