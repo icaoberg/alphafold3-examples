@@ -7,22 +7,37 @@
 #SBATCH --output=%x-%j.out
 
 # Stage 2 of 2: predict the structure from the stage 1 output on one GPU.
-# submit_af3.sh submits this job when stage 1 finishes and sets AF3_NAME.
-# To run only this stage (for example, after an inference failure):
-#   sbatch -A <allocation-id> --export=ALL,AF3_NAME=<name> af3_inference.sbatch
+#
+# Usage, from this directory, after stage1.sh finishes (or with
+# --dependency=afterok:<stage 1 job id>, see stage1.sh):
+#   sbatch -A <allocation-id> stage2.sh [input.json]
+#
+# Pass the same input as stage 1. It defaults to fold_input.json in the
+# directory you submit from.
 
 set -euo pipefail
-
-: "${AF3_NAME:?Set AF3_NAME to the job name from the input JSON}"
 
 export AF3_ROOT=/ocean/datasets/community/alphafold3
 export AF3_IMAGE=${AF3_IMAGE:-/ocean/containers/alphafold3/singularity-alphafold3-v3.0.4.sif}
 export AF3_MODEL_DIR=${AF3_MODEL_DIR:-$AF3_ROOT/weights}
 export AF3_OUTPUT_DIR=${AF3_OUTPUT_DIR:-$PROJECT/af3_output}
+
+# Slurm runs a copy of this script, so find files relative to the directory
+# the job was submitted from.
+export AF3_INPUT=$(realpath "${1:-$SLURM_SUBMIT_DIR/fold_input.json}")
+
+# AlphaFold 3 names the output directory after the input's "name", with spaces
+# replaced by underscores and characters other than [A-Za-z0-9_.-] removed.
+export AF3_NAME=$(apptainer exec "$AF3_IMAGE" python3 -c '
+import json, re, sys
+name = json.load(open(sys.argv[1]))["name"].replace(" ", "_")
+print(re.sub(r"[^A-Za-z0-9_.-]", "", name))
+' "$AF3_INPUT")
+
 export AF3_DATA_JSON=${AF3_DATA_JSON:-$AF3_OUTPUT_DIR/$AF3_NAME/${AF3_NAME}_data.json}
 
 if [[ ! -f "$AF3_DATA_JSON" ]]; then
-  echo "Missing $AF3_DATA_JSON. Run submit_af3.sh first." >&2
+  echo "Missing $AF3_DATA_JSON. Run stage1.sh first." >&2
   exit 1
 fi
 

@@ -5,11 +5,13 @@
 #SBATCH --time=12:00:00
 #SBATCH --output=%x-%j.out
 
-# Stage 1 of 2: build MSAs and find templates on RM-shared (CPU only), then
-# submit stage 2 (af3_inference.sbatch) to GPU-shared.
+# Stage 1 of 2: build MSAs and find templates on RM-shared (CPU only).
+# Stage 2 (stage2.sh) runs inference on GPU-shared.
 #
-# Usage, from this directory:
-#   sbatch -A <allocation-id> submit_af3.sh [input.json]
+# Usage, from this directory, submitting stage 2 to start after this succeeds:
+#   jobid=$(sbatch --parsable -A <allocation-id> stage1.sh [input.json])
+#   sbatch -A <allocation-id> --dependency=afterok:$jobid --kill-on-invalid-dep=yes \
+#     stage2.sh [input.json]
 #
 # The input defaults to fold_input.json in the directory you submit from.
 #
@@ -50,7 +52,7 @@ else
   export AF3_SCRATCH=${AF3_SCRATCH:-$LOCAL/af3}
   mkdir -p "$AF3_SCRATCH/output" "$AF3_SCRATCH/tmp"
 
-  # If the data pipeline fails, still copy whatever it wrote to $PROJECT.
+  # Copy results from $LOCAL to $PROJECT when the script exits, even on failure.
   trap 'rsync -a "$AF3_SCRATCH/output/" "$AF3_OUTPUT_DIR/"' EXIT
 
   # Send temporary files from the MSA tools to $LOCAL instead of /tmp.
@@ -68,14 +70,4 @@ else
       --jackhmmer_n_cpu=8 \
       --nhmmer_n_cpu=8 \
       --norun_inference
-
-  # Copy the results to $PROJECT now, so they're there before stage 2 starts.
-  rsync -a "$AF3_SCRATCH/output/" "$AF3_OUTPUT_DIR/"
 fi
-
-# Stage 2: submit inference to GPU-shared, charged to the same allocation.
-# Its Slurm options are the #SBATCH lines in af3_inference.sbatch.
-sbatch \
-  --account="$SLURM_JOB_ACCOUNT" \
-  --export=ALL \
-  "$SLURM_SUBMIT_DIR/af3_inference.sbatch"
