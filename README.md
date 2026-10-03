@@ -85,9 +85,16 @@ You don't need to download the containers, databases, or weights yourself.
    ```bash
    ssh <username>@bridges2.psc.edu
    cd $PROJECT
-   git clone https://github.com/<org>/alphafold3-examples.git
+   git clone --recurse-submodules https://github.com/icaoberg/alphafold3-examples.git
    cd alphafold3-examples
    ```
+
+   The `alphafold3/` directory is a Git submodule of the upstream
+   [google-deepmind/alphafold3](https://github.com/google-deepmind/alphafold3)
+   repository, pinned to `v3.0.4` to match the default container. You don't
+   need it to run the examples, but it's useful for reading the source and the
+   upstream docs. If you cloned without `--recurse-submodules`, run
+   `git submodule update --init`.
 
 2. Write an input JSON file (see [Input format](#input-format)), or use the
    example in `inputs/fold_input.json`.
