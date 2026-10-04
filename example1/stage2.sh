@@ -1,4 +1,24 @@
 #!/bin/bash
+#
+# Copyright (C) 2026 Ivan Cao-Berg and River Zhu
+#
+# Written by Ivan Cao-Berg and River Zhu.
+#
+# This program is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License version 2 as published by
+# the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU General Public License for more
+# details.
+#
+# You should have received a copy of the GNU General Public License along with
+# this program; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+#
+# SPDX-License-Identifier: GPL-2.0-only
+#
 #SBATCH --job-name=af3-inference
 #SBATCH --partition=GPU-shared
 #SBATCH --gpus=v100-32:1
@@ -20,7 +40,10 @@ set -euo pipefail
 export AF3_ROOT=/ocean/datasets/community/alphafold3
 export AF3_IMAGE=${AF3_IMAGE:-/ocean/containers/alphafold3/singularity-alphafold3-v3.0.4.sif}
 export AF3_MODEL_DIR=${AF3_MODEL_DIR:-$AF3_ROOT/weights}
-export AF3_OUTPUT_DIR=${AF3_OUTPUT_DIR:-$PROJECT/af3_output}
+# Results go to output/ in the directory the job was submitted from (the
+# example directory), where stage 2 reads the stage 1 output.
+export AF3_OUTPUT_DIR=${AF3_OUTPUT_DIR:-$SLURM_SUBMIT_DIR/output}
+mkdir -p "$AF3_OUTPUT_DIR"
 
 # Slurm runs a copy of this script, so find files relative to the directory
 # the job was submitted from.
@@ -46,7 +69,7 @@ export AF3_SCRATCH=${AF3_SCRATCH:-$LOCAL/af3}
 export AF3_JAX_CACHE_DIR=${AF3_JAX_CACHE_DIR:-$AF3_SCRATCH/jax_cache}
 mkdir -p "$AF3_SCRATCH/output" "$AF3_SCRATCH/tmp" "$AF3_JAX_CACHE_DIR"
 
-# Copy results from $LOCAL to $PROJECT when the script exits, even on failure.
+# Copy results from $LOCAL to $AF3_OUTPUT_DIR when the script exits, even on failure.
 trap 'rsync -a "$AF3_SCRATCH/output/" "$AF3_OUTPUT_DIR/"' EXIT
 
 export APPTAINERENV_TMPDIR="$AF3_SCRATCH/tmp"

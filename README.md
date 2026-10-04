@@ -107,7 +107,7 @@ You don't need to download the containers, databases, or weights yourself.
    ```
 
 3. Watch the jobs with `squeue -u $USER`. Results are written to
-   `$PROJECT/af3_output/<name>/`.
+   `output/<name>/` in the example directory.
 
 ## Environment variables
 
@@ -125,7 +125,7 @@ before submitting the two stages are used by both.
 | `AF3_MODEL_DIR` | `$AF3_ROOT/weights` | Passed to `--model_dir` |
 | `AF3_INPUT` | *(set by both job scripts)* | Input JSON file: the script's argument, or `fold_input.json` in the submit directory |
 | `AF3_NAME` | *(set by both job scripts)* | The input's `name`; used to find `<name>/<name>_data.json` |
-| `AF3_OUTPUT_DIR` | `$PROJECT/af3_output` | Passed to `--output_dir` |
+| `AF3_OUTPUT_DIR` | `$SLURM_SUBMIT_DIR/output` | Passed to `--output_dir`; stage 2 reads the stage 1 output from here |
 | `AF3_JAX_CACHE_DIR` | `$LOCAL/af3/jax_cache` | Passed to `--jax_compilation_cache_dir` |
 | `AF3_SCRATCH` | `$LOCAL/af3` | Node-local scratch for temporary files and in-progress output (batch jobs only) |
 
@@ -139,12 +139,13 @@ jobid=$(sbatch --parsable -A <allocation-id> stage1.sh)
 sbatch -A <allocation-id> --dependency=afterok:$jobid --kill-on-invalid-dep=yes stage2.sh
 ```
 
-Write output to `$PROJECT`, not `$HOME`. Your home directory quota is small.
+Clone this repository under `$PROJECT`, not `$HOME`, since results are written
+inside the example directories. Your home directory quota is small.
 
 `$LOCAL` is fast disk on the compute node your job runs on. It exists only
 while the job runs and is deleted when the job ends, so the job scripts use it
 for scratch and the JAX compilation cache, and copies the results to
-`$PROJECT` before the job exits. Because the cache is deleted with the job, each
+`output/` in the example directory before the job exits. Because the cache is deleted with the job, each
 new job compiles the model again (usually a few minutes). To reuse compiled
 models across jobs, set `AF3_JAX_CACHE_DIR=$PROJECT/.cache/af3_jax` instead.
 
@@ -233,6 +234,19 @@ Each example has its own directory with everything it needs to run:
 | Example | Directory | What it predicts |
 | --- | --- | --- |
 | 1 | [`example1/`](example1/) | Protein homodimer (PDB 2PV7) |
+| 2 | [`example2/`](example2/) | Protein heterodimer (barnase–barstar) |
+| 3 | [`example3/`](example3/) | Protein with ions (calmodulin + 4 Ca²⁺) |
+| 4 | [`example4/`](example4/) | Phosphorylated protein (ERK2 pThr185/pTyr187) |
+| 5 | [`example5/`](example5/) | Covalent ligand (KRAS G12C + sotorasib) |
+| 6 | [`example6/`](example6/) | Methylated double-stranded DNA |
+| 7 | [`example7/`](example7/) | Modified RNA (tRNA-like fragment) |
+| 8 | [`example8/`](example8/) | Glycoprotein (RNase B + N-glycan) |
+| 9 | [`example9/`](example9/) | Protein + ligand from SMILES (streptavidin–biotin) |
+| 10 | [`example10/`](example10/) | Protein–DNA complex (TetR dimer + tetO) |
+| 11 | [`example11/`](example11/) | Protein homodimer + ligands (TetR + tetracycline) |
+| 12 | [`example12/`](example12/) | Protein homodimer (TetR) |
+| 13 | [`example13/`](example13/) | Protein–RNA complex (U1A + RNA hairpin) |
+| 14 | [`example14/`](example14/) | Protein monomer (ubiquitin) |
 
 Each example directory contains the same three files:
 
@@ -256,10 +270,10 @@ sbatch -A <allocation-id> --dependency=afterok:$jobid --kill-on-invalid-dep=yes 
 
 1. `stage1.sh` runs on `RM-shared`. It reads the `name` from the
    input JSON, runs the data pipeline, and copies `<name>/<name>_data.json`
-   to `$AF3_OUTPUT_DIR`.
+   from `$LOCAL` to `output/` in the example directory.
 2. `stage2.sh` waits in the queue until stage 1 succeeds
    (`--dependency=afterok`), then runs on `GPU-shared`. It reads the same
-   input JSON to find `<name>/<name>_data.json` and predicts the structure.
+   input JSON to find `output/<name>/<name>_data.json` and predicts the structure.
 
 If stage 1 fails, `--kill-on-invalid-dep=yes` makes Slurm cancel stage 2, so no
 GPU job runs. `--parsable` makes `sbatch` print only the job ID, which the
@@ -307,7 +321,9 @@ set -euo pipefail
 export AF3_ROOT=/ocean/datasets/community/alphafold3
 export AF3_IMAGE=${AF3_IMAGE:-/ocean/containers/alphafold3/singularity-alphafold3-v3.0.4.sif}
 export AF3_DB_DIR=${AF3_DB_DIR:-$AF3_ROOT/databases}
-export AF3_OUTPUT_DIR=${AF3_OUTPUT_DIR:-$PROJECT/af3_output}
+# Results go to output/ in the directory the job was submitted from (the
+# example directory), where stage 2 reads the stage 1 output.
+export AF3_OUTPUT_DIR=${AF3_OUTPUT_DIR:-$SLURM_SUBMIT_DIR/output}
 mkdir -p "$AF3_OUTPUT_DIR"
 
 # Slurm runs a copy of this script, so find files relative to the directory
@@ -335,7 +351,7 @@ else
   export AF3_SCRATCH=${AF3_SCRATCH:-$LOCAL/af3}
   mkdir -p "$AF3_SCRATCH/output" "$AF3_SCRATCH/tmp"
 
-  # Copy results from $LOCAL to $PROJECT when the script exits, even on failure.
+  # Copy results from $LOCAL to $AF3_OUTPUT_DIR when the script exits, even on failure.
   trap 'rsync -a "$AF3_SCRATCH/output/" "$AF3_OUTPUT_DIR/"' EXIT
 
   # Send temporary files from the MSA tools to $LOCAL instead of /tmp.
@@ -394,7 +410,9 @@ set -euo pipefail
 export AF3_ROOT=/ocean/datasets/community/alphafold3
 export AF3_IMAGE=${AF3_IMAGE:-/ocean/containers/alphafold3/singularity-alphafold3-v3.0.4.sif}
 export AF3_MODEL_DIR=${AF3_MODEL_DIR:-$AF3_ROOT/weights}
-export AF3_OUTPUT_DIR=${AF3_OUTPUT_DIR:-$PROJECT/af3_output}
+# Results go to output/ in the directory the job was submitted from (the
+# example directory), where stage 2 reads the stage 1 output.
+export AF3_OUTPUT_DIR=${AF3_OUTPUT_DIR:-$SLURM_SUBMIT_DIR/output}
 
 # Slurm runs a copy of this script, so find files relative to the directory
 # the job was submitted from.
@@ -420,7 +438,7 @@ export AF3_SCRATCH=${AF3_SCRATCH:-$LOCAL/af3}
 export AF3_JAX_CACHE_DIR=${AF3_JAX_CACHE_DIR:-$AF3_SCRATCH/jax_cache}
 mkdir -p "$AF3_SCRATCH/output" "$AF3_SCRATCH/tmp" "$AF3_JAX_CACHE_DIR"
 
-# Copy results from $LOCAL to $PROJECT when the script exits, even on failure.
+# Copy results from $LOCAL to $AF3_OUTPUT_DIR when the script exits, even on failure.
 trap 'rsync -a "$AF3_SCRATCH/output/" "$AF3_OUTPUT_DIR/"' EXIT
 
 export APPTAINERENV_TMPDIR="$AF3_SCRATCH/tmp"
