@@ -37,6 +37,14 @@
 
 set -euo pipefail
 
+# Print how long the script took when it exits, even on failure.
+SECONDS=0
+print_elapsed() {
+  printf 'Elapsed time: %02d:%02d:%02d\n' \
+    $((SECONDS / 3600)) $((SECONDS % 3600 / 60)) $((SECONDS % 60))
+}
+trap print_elapsed EXIT
+
 export AF3_ROOT=/ocean/datasets/community/alphafold3
 export AF3_IMAGE=${AF3_IMAGE:-/ocean/containers/alphafold3/singularity-alphafold3-v3.0.4.sif}
 export AF3_MODEL_DIR=${AF3_MODEL_DIR:-$AF3_ROOT/weights}
@@ -70,7 +78,7 @@ export AF3_JAX_CACHE_DIR=${AF3_JAX_CACHE_DIR:-$AF3_SCRATCH/jax_cache}
 mkdir -p "$AF3_SCRATCH/output" "$AF3_SCRATCH/tmp" "$AF3_JAX_CACHE_DIR"
 
 # Copy results from $LOCAL to $AF3_OUTPUT_DIR when the script exits, even on failure.
-trap 'rsync -a "$AF3_SCRATCH/output/" "$AF3_OUTPUT_DIR/"' EXIT
+trap 'rsync -a "$AF3_SCRATCH/output/" "$AF3_OUTPUT_DIR/"; print_elapsed' EXIT
 
 export APPTAINERENV_TMPDIR="$AF3_SCRATCH/tmp"
 
