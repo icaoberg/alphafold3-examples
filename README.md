@@ -383,6 +383,30 @@ The script asks for 32 cores, which gives the MSA search tools about 64 GB of
 memory, and 12 hours. For very large inputs, raise `--ntasks-per-node` (up to
 64) for more memory, and `--time` (up to `72:00:00`).
 
+#### Stage 1 running times
+
+Elapsed time of each example's stage 1 job on `RM-shared` (32 cores), from the
+`Elapsed time:` line at the end of its `af3-data-<jobid>.out` log, fastest to
+slowest. These cover the data pipeline only, not inference.
+
+| Example | Job ID | RM-shared |
+| --- | --- | --- |
+| [`example6`](example6/) | 47398843 | 00:00:15 |
+| [`example12`](example12/) | 47398863 | 00:13:17 |
+| [`example10`](example10/) | 47398848 | 00:13:53 |
+| [`example11`](example11/) | 47398849 | 00:13:53 |
+| [`example1`](example1/) | 47398729 | 00:14:46 |
+| [`example3`](example3/) | 47398840 | 00:15:16 |
+| [`example5`](example5/) | 47398842 | 00:16:10 |
+| [`example14`](example14/) | 47398865 | 00:16:59 |
+| [`example4`](example4/) | 47398841 | 00:33:29 |
+| [`example9`](example9/) | 47398847 | 01:04:18 |
+| [`example7`](example7/) | 47398844 | 01:13:41 |
+| [`example13`](example13/) | 47398864 | 01:28:26 |
+| [`example8`](example8/) | 47398845 | 01:31:54 |
+| [`example2`](example2/) | 47398731 | 01:57:39 |
+| **Total** | | **09:33:56** |
+
 ### Stage 2: inference on GPU-shared
 
 `example1/stage2.sh`:
