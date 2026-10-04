@@ -156,7 +156,7 @@ defaults for some of them.
 
 | Variable | Upstream default | When to change it |
 | --- | --- | --- |
-| `XLA_FLAGS` | `--xla_gpu_enable_triton_gemm=false` | On **V100** GPUs, set `--xla_disable_hlo_passes=custom-kernel-fusion-rewriter` to avoid known numerical errors |
+| `XLA_FLAGS` | `--xla_gpu_enable_triton_gemm=false` | Rarely; the default works on L40S and H100 GPUs |
 | `XLA_PYTHON_CLIENT_PREALLOCATE` | `true` | Set to `false` to use unified memory |
 | `XLA_CLIENT_MEM_FRACTION` | `0.95` | Set to `3.2` with unified memory |
 | `TF_FORCE_UNIFIED_MEMORY` | *(unset)* | Set to `true` to let large inputs spill from GPU to host memory |
@@ -169,10 +169,10 @@ defaults for some of them.
 >
 > ```bash
 > apptainer exec --nv \
->   --env XLA_FLAGS="--xla_disable_hlo_passes=custom-kernel-fusion-rewriter" \
+>   --env XLA_PYTHON_CLIENT_PREALLOCATE=false \
 >   ...
 > # or
-> export APPTAINERENV_XLA_FLAGS="--xla_disable_hlo_passes=custom-kernel-fusion-rewriter"
+> export APPTAINERENV_XLA_PYTHON_CLIENT_PREALLOCATE=false
 > ```
 >
 > See [Environment and Metadata](https://apptainer.org/docs/user/latest/environment_and_metadata.html)
@@ -415,7 +415,7 @@ slowest. These cover the data pipeline only, not inference.
 #!/bin/bash
 #SBATCH --job-name=af3-inference
 #SBATCH --partition=GPU-shared
-#SBATCH --gpus=v100-32:1
+#SBATCH --gpus=l40s-48:1
 #SBATCH --ntasks-per-node=5
 #SBATCH --time=02:00:00
 #SBATCH --output=%x-%j.out
@@ -467,14 +467,6 @@ trap 'rsync -a "$AF3_SCRATCH/output/" "$AF3_OUTPUT_DIR/"' EXIT
 
 export APPTAINERENV_TMPDIR="$AF3_SCRATCH/tmp"
 
-# V100 GPUs (compute capability 7.0) need XLA attention and this XLA flag.
-# L40S and H100 GPUs use the default Triton attention.
-attention=triton
-if nvidia-smi --query-gpu=name --format=csv,noheader | grep -q V100; then
-  attention=xla
-  export APPTAINERENV_XLA_FLAGS="--xla_disable_hlo_passes=custom-kernel-fusion-rewriter"
-fi
-
 apptainer exec --nv \
   --bind /ocean \
   --bind "$PROJECT" \
@@ -485,13 +477,12 @@ apptainer exec --nv \
     --model_dir="$AF3_MODEL_DIR" \
     --output_dir="$AF3_SCRATCH/output" \
     --jax_compilation_cache_dir="$AF3_JAX_CACHE_DIR" \
-    --flash_attention_implementation="$attention" \
     --norun_data_pipeline
 ```
 
-The script checks which GPU it got and sets the V100 workarounds only when it
-needs them, so you can change `--gpus` to `l40s-48:1` or `h100-80:1` without
-editing anything else.
+The script requests one L40S GPU (48 GB), which runs the default `triton`
+attention with no extra settings. For very large complexes, change `--gpus` to
+`h100-80:1`. Don't use the V100 GPUs (see [GPU notes](#gpu-notes-for-bridges-2)).
 
 Both stages write to `$AF3_SCRATCH` on the node's local disk while they run and
 copy the results to `$AF3_OUTPUT_DIR`. If a job hits its time limit, Slurm
@@ -529,7 +520,7 @@ sees the existing `_data.json` and skips the data pipeline.
 | `--run_data_pipeline` / `--norun_data_pipeline` | Turn the CPU MSA/template stage on or off |
 | `--run_inference` / `--norun_inference` | Turn the GPU model stage on or off |
 | `--jackhmmer_n_cpu`, `--nhmmer_n_cpu` | CPU threads for the MSA search tools |
-| `--flash_attention_implementation` | `triton` (default, Ampere+), `cudnn` (Ampere+), or `xla` (any GPU; **required on V100**) |
+| `--flash_attention_implementation` | `triton` (default, Ampere+), `cudnn` (Ampere+), or `xla` (slower fallback) |
 | `--num_diffusion_samples` | Samples per seed (default 5) |
 | `--num_seeds` | Generate this many seeds when the input has only one |
 | `--jax_compilation_cache_dir` | Reuse compiled models between runs |
@@ -543,15 +534,17 @@ list every flag.
 
 | GPU | `--gpus=` | Notes |
 | --- | --- | --- |
-| NVIDIA V100 16/32 GB | `v100-16:1`, `v100-32:1` | Compute capability 7.0. Needs `XLA_FLAGS=--xla_disable_hlo_passes=custom-kernel-fusion-rewriter` and `--flash_attention_implementation=xla`; `stage2.sh` sets both when it detects a V100. With unified memory, inputs up to about 1,280 tokens fit. |
-| NVIDIA L40S 48 GB | `l40s-48:1` | Ada architecture; the default `triton` attention works. |
+| NVIDIA L40S 48 GB | `l40s-48:1` | Used by the examples. Ada architecture; the default `triton` attention works. |
 | NVIDIA H100 80 GB | `h100-80:1` | Best choice for large complexes; works with the default settings. |
+
+Don't use the V100 GPUs (`v100-16`, `v100-32`). They are older than Ampere, so
+they can't run the default attention, need XLA workarounds, and have less memory.
 
 AlphaFold 3 uses a **single GPU** per prediction, so request exactly one:
 `--gpus=<type>:1` on `GPU-shared`. That is also the minimum on `GPU-shared`.
 More GPUs won't make one prediction faster; the extra GPUs sit idle and are
 still charged to your allocation. Don't use the `GPU` partition for these jobs:
-it allocates whole nodes (8 GPUs, or 16 on one V100 node), so you'd pay for
+it allocates whole nodes (8 GPUs), so you'd pay for
 7 idle GPUs. To process many inputs, submit one 1-GPU job per input or use a
 Slurm job array.
 
@@ -578,9 +571,8 @@ for how to interpret the confidence metrics.
 
 | Symptom | Fix |
 | --- | --- |
-| Wrong or `NaN` structures on V100 | Set `XLA_FLAGS` with `--env` or `APPTAINERENV_` (see the [warning above](#variables-read-by-jaxxla-inside-the-container)) and use `--flash_attention_implementation=xla` |
 | `RESOURCE_EXHAUSTED` / out of GPU memory | Enable [unified memory](#unified-memory-large-inputs-or-small-gpus), or use an H100 node |
-| Triton/cuDNN attention errors | The GPU is older than Ampere; use `--flash_attention_implementation=xla` |
+| Triton/cuDNN attention errors | The job landed on an older GPU; check that `--gpus` is `l40s-48:1` or `h100-80:1` |
 | Long time before inference starts | JAX compiles the model at the start of each job when the cache is on `$LOCAL`. Point `AF3_JAX_CACHE_DIR` at `$PROJECT` so later jobs reuse it |
 | No `af3-inference` job after `af3-data` finished | The data pipeline failed, so Slurm cancelled stage 2. Check `af3-data-<jobid>.out`, fix the problem, and submit both stages again |
 | `No such file or directory` for `/ocean/...` inside the container | Add `--bind /ocean` (and `--bind $PROJECT`) to `apptainer exec` ([bind paths docs](https://apptainer.org/docs/user/latest/bind_paths_and_mounts.html)) |

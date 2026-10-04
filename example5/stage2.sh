@@ -21,7 +21,7 @@
 #
 #SBATCH --job-name=af3-inference
 #SBATCH --partition=GPU-shared
-#SBATCH --gpus=v100-32:1
+#SBATCH --gpus=l40s-48:1
 #SBATCH --ntasks-per-node=5
 #SBATCH --time=02:00:00
 #SBATCH --output=%x-%j.out
@@ -82,14 +82,6 @@ trap 'rsync -a "$AF3_SCRATCH/output/" "$AF3_OUTPUT_DIR/"; print_elapsed' EXIT
 
 export APPTAINERENV_TMPDIR="$AF3_SCRATCH/tmp"
 
-# V100 GPUs (compute capability 7.0) need XLA attention and this XLA flag.
-# L40S and H100 GPUs use the default Triton attention.
-attention=triton
-if nvidia-smi --query-gpu=name --format=csv,noheader | grep -q V100; then
-  attention=xla
-  export APPTAINERENV_XLA_FLAGS="--xla_disable_hlo_passes=custom-kernel-fusion-rewriter"
-fi
-
 apptainer exec --nv \
   --bind /ocean \
   --bind "$PROJECT" \
@@ -100,5 +92,4 @@ apptainer exec --nv \
     --model_dir="$AF3_MODEL_DIR" \
     --output_dir="$AF3_SCRATCH/output" \
     --jax_compilation_cache_dir="$AF3_JAX_CACHE_DIR" \
-    --flash_attention_implementation="$attention" \
     --norun_data_pipeline
