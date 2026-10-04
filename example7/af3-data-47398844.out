@@ -1,0 +1,33 @@
+Input:  /ocean/projects/pscstaff/icaoberg/code/alphafold3-examples/example7/fold_input.json
+Output: /ocean/projects/pscstaff/icaoberg/code/alphafold3-examples/example7/output/modified_RNA_hairpin
+I1004 02:35:25.695470 22837060973312 pipeline.py:173] Getting RNA MSAs for sequence GGCGCGAUAGCUUAGUCCGUAGAGC
+I1004 02:35:25.696260 22834199418560 nhmmer.py:188] Query sequence (non-sharded db): GGCGCGAUAGCUUAGU... (len 25)
+I1004 02:35:25.696845 22834197317312 nhmmer.py:188] Query sequence (non-sharded db): GGCGCGAUAGCUUAGU... (len 25)
+I1004 02:35:25.697304 22834126517952 nhmmer.py:188] Query sequence (non-sharded db): GGCGCGAUAGCUUAGU... (len 25)
+I1004 02:35:25.697847 22834197317312 subprocess_utils.py:91] Launching subprocess "/hmmer/bin/nhmmer -o /dev/null --noali --cpu 8 -E 0.001 --rna -A /local/af3/tmp/tmpvy0qkhpn/output.sto --F3 0.02 /local/af3/tmp/tmpvy0qkhpn/query.a3m /ocean/datasets/community/alphafold3/databases/rfam_14_9_clust_seq_id_90_cov_80_rep_seq.fasta"
+I1004 02:35:25.698181 22834199418560 subprocess_utils.py:91] Launching subprocess "/hmmer/bin/nhmmer -o /dev/null --noali --cpu 8 -E 0.001 --rna -A /local/af3/tmp/tmpi6s92mq6/output.sto --F3 0.02 /local/af3/tmp/tmpi6s92mq6/query.a3m /ocean/datasets/community/alphafold3/databases/nt_rna_2023_02_23_clust_seq_id_90_cov_80_rep_seq.fasta"
+I1004 02:35:25.698271 22834126517952 subprocess_utils.py:91] Launching subprocess "/hmmer/bin/nhmmer -o /dev/null --noali --cpu 8 -E 0.001 --rna -A /local/af3/tmp/tmpr16zl5uf/output.sto --F3 0.02 /local/af3/tmp/tmpr16zl5uf/query.a3m /ocean/datasets/community/alphafold3/databases/rnacentral_active_seq_id_90_cov_80_linclust.fasta"
+I1004 02:35:35.380959 22834197317312 subprocess_utils.py:120] Finished Nhmmer (rfam_14_9_clust_seq_id_90_cov_80_rep_seq.fasta) in 9.683 seconds
+I1004 02:47:52.196122 22834126517952 subprocess_utils.py:120] Finished Nhmmer (rnacentral_active_seq_id_90_cov_80_linclust.fasta) in 746.497 seconds
+I1004 03:48:50.006124 22834199418560 subprocess_utils.py:120] Finished Nhmmer (nt_rna_2023_02_23_clust_seq_id_90_cov_80_rep_seq.fasta) in 4404.308 seconds
+I1004 03:48:50.012190 22837060973312 pipeline.py:203] Getting RNA MSAs took 4404.32 seconds for sequence GGCGCGAUAGCUUAGUCCGUAGAGC, found 1 unpaired sequences
+
+Running AlphaFold 3. Please note that standard AlphaFold 3 model parameters are
+only available under terms of use provided at
+https://github.com/google-deepmind/alphafold3/blob/main/WEIGHTS_TERMS_OF_USE.md.
+If you do not agree to these terms and are using AlphaFold 3 derived model
+parameters, cancel execution of AlphaFold 3 inference with CTRL-C, and do not
+use the model parameters.
+
+
+Running fold job modified_RNA_hairpin...
+Output will be written in /local/af3/output/modified_RNA_hairpin
+Running data pipeline...
+Running data pipeline for chain A...
+Running data pipeline for chain A took 4404.32 seconds
+Writing model input JSON to /local/af3/output/modified_RNA_hairpin/modified_RNA_hairpin_data.json
+Skipping model inference...
+Fold job modified_RNA_hairpin done, output written to /local/af3/output/modified_RNA_hairpin
+
+Done running 1 fold jobs.
+Elapsed time: 01:13:41

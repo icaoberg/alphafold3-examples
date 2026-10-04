@@ -1,0 +1,46 @@
+Input:  /ocean/projects/pscstaff/icaoberg/code/alphafold3-examples/example8/fold_input.json
+Output: /ocean/projects/pscstaff/icaoberg/code/alphafold3-examples/example8/output/RNaseB_glycosylated
+I1004 02:35:25.695518 22388322595584 pipeline.py:92] Getting protein MSAs for sequence KETAAAKFERQHMDSSTSAASSSNYCNQMMKSRNLTKDRCKPVNTFVHESLADVQAVCSQKNVACKNGQTNCYQSYSTMSITDCRETGSSKYPNCAYKTTQANKHIIVACEGNPYVPVHFDASV
+I1004 02:35:25.785290 22385454692032 jackhmmer.py:186] Query sequence (non-sharded db): KETAAAKFERQHMDSS... (len 124)
+I1004 02:35:25.785485 22385458894528 jackhmmer.py:186] Query sequence (non-sharded db): KETAAAKFERQHMDSS... (len 124)
+I1004 02:35:25.785638 22385456793280 jackhmmer.py:186] Query sequence (non-sharded db): KETAAAKFERQHMDSS... (len 124)
+I1004 02:35:25.785735 22385460995776 jackhmmer.py:186] Query sequence (non-sharded db): KETAAAKFERQHMDSS... (len 124)
+I1004 02:35:25.786790 22385454692032 subprocess_utils.py:91] Launching subprocess "/hmmer/bin/jackhmmer -o /dev/null -A /local/af3/tmp/tmpwzo9p8dl/output.sto --noali --F1 0.0005 --F2 5e-05 --F3 5e-07 --cpu 8 -N 1 -E 0.0001 --incE 0.0001 --seq_limit 50000 /local/af3/tmp/tmpwzo9p8dl/query.fasta /ocean/datasets/community/alphafold3/databases/uniprot_all_2021_04.fa"
+I1004 02:35:25.786915 22385458894528 subprocess_utils.py:91] Launching subprocess "/hmmer/bin/jackhmmer -o /dev/null -A /local/af3/tmp/tmp74ix2r1r/output.sto --noali --F1 0.0005 --F2 5e-05 --F3 5e-07 --cpu 8 -N 1 -E 0.0001 --incE 0.0001 --seq_limit 5000 /local/af3/tmp/tmp74ix2r1r/query.fasta /ocean/datasets/community/alphafold3/databases/mgy_clusters_2022_05.fa"
+I1004 02:35:25.787081 22385456793280 subprocess_utils.py:91] Launching subprocess "/hmmer/bin/jackhmmer -o /dev/null -A /local/af3/tmp/tmpbdl9p8i7/output.sto --noali --F1 0.0005 --F2 5e-05 --F3 5e-07 --cpu 8 -N 1 -E 0.0001 --incE 0.0001 --seq_limit 5000 /local/af3/tmp/tmpbdl9p8i7/query.fasta /ocean/datasets/community/alphafold3/databases/bfd-first_non_consensus_sequences.fasta"
+I1004 02:35:25.787512 22385460995776 subprocess_utils.py:91] Launching subprocess "/hmmer/bin/jackhmmer -o /dev/null -A /local/af3/tmp/tmp02w0rbmb/output.sto --noali --F1 0.0005 --F2 5e-05 --F3 5e-07 --cpu 8 -N 1 -E 0.0001 --incE 0.0001 --seq_limit 10000 /local/af3/tmp/tmp02w0rbmb/query.fasta /ocean/datasets/community/alphafold3/databases/uniref90_2022_05.fa"
+I1004 02:36:56.905698 22385456793280 subprocess_utils.py:120] Finished Jackhmmer (bfd-first_non_consensus_sequences.fasta) in 91.118 seconds
+I1004 02:41:03.177473 22385460995776 subprocess_utils.py:120] Finished Jackhmmer (uniref90_2022_05.fa) in 337.390 seconds
+I1004 02:49:04.158549 22385458894528 subprocess_utils.py:120] Finished Jackhmmer (mgy_clusters_2022_05.fa) in 818.371 seconds
+I1004 04:06:51.444011 22385454692032 subprocess_utils.py:120] Finished Jackhmmer (uniprot_all_2021_04.fa) in 5485.657 seconds
+I1004 04:06:51.468664 22388322595584 pipeline.py:125] Getting protein MSAs took 5485.77 seconds for sequence KETAAAKFERQHMDSSTSAASSSNYCNQMMKSRNLTKDRCKPVNTFVHESLADVQAVCSQKNVACKNGQTNCYQSYSTMSITDCRETGSSKYPNCAYKTTQANKHIIVACEGNPYVPVHFDASV
+I1004 04:06:51.468948 22388322595584 pipeline.py:131] Deduplicating MSAs for sequence KETAAAKFERQHMDSSTSAASSSNYCNQMMKSRNLTKDRCKPVNTFVHESLADVQAVCSQKNVACKNGQTNCYQSYSTMSITDCRETGSSKYPNCAYKTTQANKHIIVACEGNPYVPVHFDASV
+I1004 04:06:51.577505 22388322595584 pipeline.py:144] Deduplicating MSAs took 0.11 seconds for sequence KETAAAKFERQHMDSSTSAASSSNYCNQMMKSRNLTKDRCKPVNTFVHESLADVQAVCSQKNVACKNGQTNCYQSYSTMSITDCRETGSSKYPNCAYKTTQANKHIIVACEGNPYVPVHFDASV, found 2015 unpaired sequences, 2216 paired sequences
+I1004 04:06:51.578799 22388322595584 pipeline.py:50] Getting protein templates for sequence KETAAAKFERQHMDSSTSAASSSNYCNQMMKSRNLTKDRCKPVNTFVHESLADVQAVCSQKNVACKNGQTNCYQSYSTMSITDCRETGSSKYPNCAYKTTQANKHIIVACEGNPYVPVHFDASV
+I1004 04:06:51.609240 22388322595584 subprocess_utils.py:91] Launching subprocess "/hmmer/bin/hmmbuild --informat stockholm --hand --amino /local/af3/tmp/tmps62s1urt/output.hmm /local/af3/tmp/tmps62s1urt/query.msa"
+I1004 04:06:51.833863 22388322595584 subprocess_utils.py:120] Finished Hmmbuild in 0.225 seconds
+I1004 04:06:51.834471 22388322595584 subprocess_utils.py:91] Launching subprocess "/hmmer/bin/hmmsearch --noali --cpu 8 --F1 0.1 --F2 0.1 --F3 0.1 -E 100 --incE 100 --domE 100 --incdomE 100 -A /local/af3/tmp/tmp62nxgfme/output.sto /local/af3/tmp/tmp62nxgfme/query.hmm /ocean/datasets/community/alphafold3/databases/pdb_seqres_2022_09_28.fasta"
+I1004 04:06:53.882452 22388322595584 subprocess_utils.py:120] Finished Hmmsearch (pdb_seqres_2022_09_28.fasta) in 2.048 seconds
+I1004 04:07:04.722797 22388322595584 pipeline.py:62] Getting 4 protein templates took 13.14 seconds for sequence KETAAAKFERQHMDSSTSAASSSNYCNQMMKSRNLTKDRCKPVNTFVHESLADVQAVCSQKNVACKNGQTNCYQSYSTMSITDCRETGSSKYPNCAYKTTQANKHIIVACEGNPYVPVHFDASV
+
+Running AlphaFold 3. Please note that standard AlphaFold 3 model parameters are
+only available under terms of use provided at
+https://github.com/google-deepmind/alphafold3/blob/main/WEIGHTS_TERMS_OF_USE.md.
+If you do not agree to these terms and are using AlphaFold 3 derived model
+parameters, cancel execution of AlphaFold 3 inference with CTRL-C, and do not
+use the model parameters.
+
+
+Running fold job RNaseB_glycosylated...
+Output will be written in /local/af3/output/RNaseB_glycosylated
+Running data pipeline...
+Running data pipeline for chain A...
+Running data pipeline for chain A took 5499.16 seconds
+Running data pipeline for chain B...
+Running data pipeline for chain B took 0.00 seconds
+Writing model input JSON to /local/af3/output/RNaseB_glycosylated/RNaseB_glycosylated_data.json
+Skipping model inference...
+Fold job RNaseB_glycosylated done, output written to /local/af3/output/RNaseB_glycosylated
+
+Done running 1 fold jobs.
+Elapsed time: 01:31:54

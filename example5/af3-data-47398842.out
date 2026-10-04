@@ -1,0 +1,46 @@
+Input:  /ocean/projects/pscstaff/icaoberg/code/alphafold3-examples/example5/fold_input.json
+Output: /ocean/projects/pscstaff/icaoberg/code/alphafold3-examples/example5/output/KRAS_G12C_sotorasib_covalent
+I1004 02:35:25.695559 23407987770112 pipeline.py:92] Getting protein MSAs for sequence MTEYKLVVVGACGVGKSALTIQLIQNHFVDEYDPTIEDSYRKQVVIDGETCLLDILDTAGQEEYSAMRDQYMRTGEGFLCVFAINNTKSFEDIHHYREQIKRVKDSEDVPMVLVGNKCDLPSRTVDTKQAQDLARSYGIPFIETSAKTRQRVEDAFYTLVREIRQYRLKKISKEEKTPGCVKIKKCIIM
+I1004 02:35:25.788202 23405125146304 jackhmmer.py:186] Query sequence (non-sharded db): MTEYKLVVVGACGVGK... (len 189)
+I1004 02:35:25.788395 23405118842560 jackhmmer.py:186] Query sequence (non-sharded db): MTEYKLVVVGACGVGK... (len 189)
+I1004 02:35:25.788563 23405120943808 jackhmmer.py:186] Query sequence (non-sharded db): MTEYKLVVVGACGVGK... (len 189)
+I1004 02:35:25.788657 23405123045056 jackhmmer.py:186] Query sequence (non-sharded db): MTEYKLVVVGACGVGK... (len 189)
+I1004 02:35:25.789587 23405125146304 subprocess_utils.py:91] Launching subprocess "/hmmer/bin/jackhmmer -o /dev/null -A /local/af3/tmp/tmpz_x6quz6/output.sto --noali --F1 0.0005 --F2 5e-05 --F3 5e-07 --cpu 8 -N 1 -E 0.0001 --incE 0.0001 --seq_limit 10000 /local/af3/tmp/tmpz_x6quz6/query.fasta /ocean/datasets/community/alphafold3/databases/uniref90_2022_05.fa"
+I1004 02:35:25.789842 23405118842560 subprocess_utils.py:91] Launching subprocess "/hmmer/bin/jackhmmer -o /dev/null -A /local/af3/tmp/tmpa4gx14w6/output.sto --noali --F1 0.0005 --F2 5e-05 --F3 5e-07 --cpu 8 -N 1 -E 0.0001 --incE 0.0001 --seq_limit 50000 /local/af3/tmp/tmpa4gx14w6/query.fasta /ocean/datasets/community/alphafold3/databases/uniprot_all_2021_04.fa"
+I1004 02:35:25.789973 23405120943808 subprocess_utils.py:91] Launching subprocess "/hmmer/bin/jackhmmer -o /dev/null -A /local/af3/tmp/tmpn750y8fa/output.sto --noali --F1 0.0005 --F2 5e-05 --F3 5e-07 --cpu 8 -N 1 -E 0.0001 --incE 0.0001 --seq_limit 5000 /local/af3/tmp/tmpn750y8fa/query.fasta /ocean/datasets/community/alphafold3/databases/bfd-first_non_consensus_sequences.fasta"
+I1004 02:35:25.790712 23405123045056 subprocess_utils.py:91] Launching subprocess "/hmmer/bin/jackhmmer -o /dev/null -A /local/af3/tmp/tmpgp9srrsu/output.sto --noali --F1 0.0005 --F2 5e-05 --F3 5e-07 --cpu 8 -N 1 -E 0.0001 --incE 0.0001 --seq_limit 5000 /local/af3/tmp/tmpgp9srrsu/query.fasta /ocean/datasets/community/alphafold3/databases/mgy_clusters_2022_05.fa"
+I1004 02:37:00.563245 23405120943808 subprocess_utils.py:120] Finished Jackhmmer (bfd-first_non_consensus_sequences.fasta) in 94.773 seconds
+I1004 02:41:07.909782 23405125146304 subprocess_utils.py:120] Finished Jackhmmer (uniref90_2022_05.fa) in 342.120 seconds
+I1004 02:44:45.329782 23405118842560 subprocess_utils.py:120] Finished Jackhmmer (uniprot_all_2021_04.fa) in 559.540 seconds
+I1004 02:51:13.182846 23405123045056 subprocess_utils.py:120] Finished Jackhmmer (mgy_clusters_2022_05.fa) in 947.392 seconds
+I1004 02:51:13.258061 23407987770112 pipeline.py:125] Getting protein MSAs took 947.56 seconds for sequence MTEYKLVVVGACGVGKSALTIQLIQNHFVDEYDPTIEDSYRKQVVIDGETCLLDILDTAGQEEYSAMRDQYMRTGEGFLCVFAINNTKSFEDIHHYREQIKRVKDSEDVPMVLVGNKCDLPSRTVDTKQAQDLARSYGIPFIETSAKTRQRVEDAFYTLVREIRQYRLKKISKEEKTPGCVKIKKCIIM
+I1004 02:51:13.258291 23407987770112 pipeline.py:131] Deduplicating MSAs for sequence MTEYKLVVVGACGVGKSALTIQLIQNHFVDEYDPTIEDSYRKQVVIDGETCLLDILDTAGQEEYSAMRDQYMRTGEGFLCVFAINNTKSFEDIHHYREQIKRVKDSEDVPMVLVGNKCDLPSRTVDTKQAQDLARSYGIPFIETSAKTRQRVEDAFYTLVREIRQYRLKKISKEEKTPGCVKIKKCIIM
+I1004 02:51:13.327849 23407987770112 pipeline.py:144] Deduplicating MSAs took 0.07 seconds for sequence MTEYKLVVVGACGVGKSALTIQLIQNHFVDEYDPTIEDSYRKQVVIDGETCLLDILDTAGQEEYSAMRDQYMRTGEGFLCVFAINNTKSFEDIHHYREQIKRVKDSEDVPMVLVGNKCDLPSRTVDTKQAQDLARSYGIPFIETSAKTRQRVEDAFYTLVREIRQYRLKKISKEEKTPGCVKIKKCIIM, found 18770 unpaired sequences, 50000 paired sequences
+I1004 02:51:13.337840 23407987770112 pipeline.py:50] Getting protein templates for sequence MTEYKLVVVGACGVGKSALTIQLIQNHFVDEYDPTIEDSYRKQVVIDGETCLLDILDTAGQEEYSAMRDQYMRTGEGFLCVFAINNTKSFEDIHHYREQIKRVKDSEDVPMVLVGNKCDLPSRTVDTKQAQDLARSYGIPFIETSAKTRQRVEDAFYTLVREIRQYRLKKISKEEKTPGCVKIKKCIIM
+I1004 02:51:13.608346 23407987770112 subprocess_utils.py:91] Launching subprocess "/hmmer/bin/hmmbuild --informat stockholm --hand --amino /local/af3/tmp/tmp58sphyz8/output.hmm /local/af3/tmp/tmp58sphyz8/query.msa"
+I1004 02:51:14.263832 23407987770112 subprocess_utils.py:120] Finished Hmmbuild in 0.655 seconds
+I1004 02:51:14.267081 23407987770112 subprocess_utils.py:91] Launching subprocess "/hmmer/bin/hmmsearch --noali --cpu 8 --F1 0.1 --F2 0.1 --F3 0.1 -E 100 --incE 100 --domE 100 --incdomE 100 -A /local/af3/tmp/tmpigvkxnzm/output.sto /local/af3/tmp/tmpigvkxnzm/query.hmm /ocean/datasets/community/alphafold3/databases/pdb_seqres_2022_09_28.fasta"
+I1004 02:51:19.473247 23407987770112 subprocess_utils.py:120] Finished Hmmsearch (pdb_seqres_2022_09_28.fasta) in 5.206 seconds
+I1004 02:51:20.846337 23407987770112 pipeline.py:62] Getting 4 protein templates took 7.51 seconds for sequence MTEYKLVVVGACGVGKSALTIQLIQNHFVDEYDPTIEDSYRKQVVIDGETCLLDILDTAGQEEYSAMRDQYMRTGEGFLCVFAINNTKSFEDIHHYREQIKRVKDSEDVPMVLVGNKCDLPSRTVDTKQAQDLARSYGIPFIETSAKTRQRVEDAFYTLVREIRQYRLKKISKEEKTPGCVKIKKCIIM
+
+Running AlphaFold 3. Please note that standard AlphaFold 3 model parameters are
+only available under terms of use provided at
+https://github.com/google-deepmind/alphafold3/blob/main/WEIGHTS_TERMS_OF_USE.md.
+If you do not agree to these terms and are using AlphaFold 3 derived model
+parameters, cancel execution of AlphaFold 3 inference with CTRL-C, and do not
+use the model parameters.
+
+
+Running fold job KRAS_G12C_sotorasib_covalent...
+Output will be written in /local/af3/output/KRAS_G12C_sotorasib_covalent
+Running data pipeline...
+Running data pipeline for chain A...
+Running data pipeline for chain A took 955.31 seconds
+Running data pipeline for chain B...
+Running data pipeline for chain B took 0.00 seconds
+Writing model input JSON to /local/af3/output/KRAS_G12C_sotorasib_covalent/KRAS_G12C_sotorasib_covalent_data.json
+Skipping model inference...
+Fold job KRAS_G12C_sotorasib_covalent done, output written to /local/af3/output/KRAS_G12C_sotorasib_covalent
+
+Done running 1 fold jobs.
+Elapsed time: 00:16:10

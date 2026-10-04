@@ -1,0 +1,46 @@
+Input:  /ocean/projects/pscstaff/icaoberg/code/alphafold3-examples/example12/fold_input.json
+Output: /ocean/projects/pscstaff/icaoberg/code/alphafold3-examples/example12/output/TetR_homodimer
+I1004 02:35:25.695806 22867840877312 pipeline.py:92] Getting protein MSAs for sequence MARLNRESVIDAALELLNETGIDGLTTRKLAQKLGIEQPTLYWHVKNKRALLDALAVEILARHHDYSLPAAGESWQSFLRNNAMSFRRALLRYRDGAKVHLGTRPDEKQYDTVETQLRFMTENGFSLRDGLYAISAVSHFTLGAVLEQQEHTAALTDRPAAPDENLPPLLREALQIMDSDDGEQAFLHGLESLIRGFEVQLTALLQIVGGDKLIIPFC
+I1004 02:35:25.784977 22864974067392 jackhmmer.py:186] Query sequence (non-sharded db): MARLNRESVIDAALEL... (len 218)
+I1004 02:35:25.785180 22864978269888 jackhmmer.py:186] Query sequence (non-sharded db): MARLNRESVIDAALEL... (len 218)
+I1004 02:35:25.785348 22864976168640 jackhmmer.py:186] Query sequence (non-sharded db): MARLNRESVIDAALEL... (len 218)
+I1004 02:35:25.785463 22864971966144 jackhmmer.py:186] Query sequence (non-sharded db): MARLNRESVIDAALEL... (len 218)
+I1004 02:35:25.786562 22864974067392 subprocess_utils.py:91] Launching subprocess "/hmmer/bin/jackhmmer -o /dev/null -A /local/af3/tmp/tmprhjw6puw/output.sto --noali --F1 0.0005 --F2 5e-05 --F3 5e-07 --cpu 8 -N 1 -E 0.0001 --incE 0.0001 --seq_limit 5000 /local/af3/tmp/tmprhjw6puw/query.fasta /ocean/datasets/community/alphafold3/databases/bfd-first_non_consensus_sequences.fasta"
+I1004 02:35:25.786893 22864978269888 subprocess_utils.py:91] Launching subprocess "/hmmer/bin/jackhmmer -o /dev/null -A /local/af3/tmp/tmp4bviabwz/output.sto --noali --F1 0.0005 --F2 5e-05 --F3 5e-07 --cpu 8 -N 1 -E 0.0001 --incE 0.0001 --seq_limit 10000 /local/af3/tmp/tmp4bviabwz/query.fasta /ocean/datasets/community/alphafold3/databases/uniref90_2022_05.fa"
+I1004 02:35:25.787119 22864976168640 subprocess_utils.py:91] Launching subprocess "/hmmer/bin/jackhmmer -o /dev/null -A /local/af3/tmp/tmp2lifh49u/output.sto --noali --F1 0.0005 --F2 5e-05 --F3 5e-07 --cpu 8 -N 1 -E 0.0001 --incE 0.0001 --seq_limit 5000 /local/af3/tmp/tmp2lifh49u/query.fasta /ocean/datasets/community/alphafold3/databases/mgy_clusters_2022_05.fa"
+I1004 02:35:25.787258 22864971966144 subprocess_utils.py:91] Launching subprocess "/hmmer/bin/jackhmmer -o /dev/null -A /local/af3/tmp/tmpvdd0w4ps/output.sto --noali --F1 0.0005 --F2 5e-05 --F3 5e-07 --cpu 8 -N 1 -E 0.0001 --incE 0.0001 --seq_limit 50000 /local/af3/tmp/tmpvdd0w4ps/query.fasta /ocean/datasets/community/alphafold3/databases/uniprot_all_2021_04.fa"
+I1004 02:36:59.587886 22864974067392 subprocess_utils.py:120] Finished Jackhmmer (bfd-first_non_consensus_sequences.fasta) in 93.801 seconds
+I1004 02:41:24.492789 22864978269888 subprocess_utils.py:120] Finished Jackhmmer (uniref90_2022_05.fa) in 358.706 seconds
+I1004 02:44:31.868170 22864971966144 subprocess_utils.py:120] Finished Jackhmmer (uniprot_all_2021_04.fa) in 546.080 seconds
+I1004 02:48:18.600042 22864976168640 subprocess_utils.py:120] Finished Jackhmmer (mgy_clusters_2022_05.fa) in 772.813 seconds
+I1004 02:48:18.680448 22867840877312 pipeline.py:125] Getting protein MSAs took 772.98 seconds for sequence MARLNRESVIDAALELLNETGIDGLTTRKLAQKLGIEQPTLYWHVKNKRALLDALAVEILARHHDYSLPAAGESWQSFLRNNAMSFRRALLRYRDGAKVHLGTRPDEKQYDTVETQLRFMTENGFSLRDGLYAISAVSHFTLGAVLEQQEHTAALTDRPAAPDENLPPLLREALQIMDSDDGEQAFLHGLESLIRGFEVQLTALLQIVGGDKLIIPFC
+I1004 02:48:18.680690 22867840877312 pipeline.py:131] Deduplicating MSAs for sequence MARLNRESVIDAALELLNETGIDGLTTRKLAQKLGIEQPTLYWHVKNKRALLDALAVEILARHHDYSLPAAGESWQSFLRNNAMSFRRALLRYRDGAKVHLGTRPDEKQYDTVETQLRFMTENGFSLRDGLYAISAVSHFTLGAVLEQQEHTAALTDRPAAPDENLPPLLREALQIMDSDDGEQAFLHGLESLIRGFEVQLTALLQIVGGDKLIIPFC
+I1004 02:48:18.738509 22867840877312 pipeline.py:144] Deduplicating MSAs took 0.06 seconds for sequence MARLNRESVIDAALELLNETGIDGLTTRKLAQKLGIEQPTLYWHVKNKRALLDALAVEILARHHDYSLPAAGESWQSFLRNNAMSFRRALLRYRDGAKVHLGTRPDEKQYDTVETQLRFMTENGFSLRDGLYAISAVSHFTLGAVLEQQEHTAALTDRPAAPDENLPPLLREALQIMDSDDGEQAFLHGLESLIRGFEVQLTALLQIVGGDKLIIPFC, found 16195 unpaired sequences, 18381 paired sequences
+I1004 02:48:18.748054 22867840877312 pipeline.py:50] Getting protein templates for sequence MARLNRESVIDAALELLNETGIDGLTTRKLAQKLGIEQPTLYWHVKNKRALLDALAVEILARHHDYSLPAAGESWQSFLRNNAMSFRRALLRYRDGAKVHLGTRPDEKQYDTVETQLRFMTENGFSLRDGLYAISAVSHFTLGAVLEQQEHTAALTDRPAAPDENLPPLLREALQIMDSDDGEQAFLHGLESLIRGFEVQLTALLQIVGGDKLIIPFC
+I1004 02:48:18.965875 22867840877312 subprocess_utils.py:91] Launching subprocess "/hmmer/bin/hmmbuild --informat stockholm --hand --amino /local/af3/tmp/tmp4a31xduz/output.hmm /local/af3/tmp/tmp4a31xduz/query.msa"
+I1004 02:48:19.646403 22867840877312 subprocess_utils.py:120] Finished Hmmbuild in 0.680 seconds
+I1004 02:48:19.649850 22867840877312 subprocess_utils.py:91] Launching subprocess "/hmmer/bin/hmmsearch --noali --cpu 8 --F1 0.1 --F2 0.1 --F3 0.1 -E 100 --incE 100 --domE 100 --incdomE 100 -A /local/af3/tmp/tmpf2nl1_ha/output.sto /local/af3/tmp/tmpf2nl1_ha/query.hmm /ocean/datasets/community/alphafold3/databases/pdb_seqres_2022_09_28.fasta"
+I1004 02:48:25.985416 22867840877312 subprocess_utils.py:120] Finished Hmmsearch (pdb_seqres_2022_09_28.fasta) in 6.335 seconds
+I1004 02:48:27.020473 22867840877312 pipeline.py:62] Getting 4 protein templates took 8.27 seconds for sequence MARLNRESVIDAALELLNETGIDGLTTRKLAQKLGIEQPTLYWHVKNKRALLDALAVEILARHHDYSLPAAGESWQSFLRNNAMSFRRALLRYRDGAKVHLGTRPDEKQYDTVETQLRFMTENGFSLRDGLYAISAVSHFTLGAVLEQQEHTAALTDRPAAPDENLPPLLREALQIMDSDDGEQAFLHGLESLIRGFEVQLTALLQIVGGDKLIIPFC
+
+Running AlphaFold 3. Please note that standard AlphaFold 3 model parameters are
+only available under terms of use provided at
+https://github.com/google-deepmind/alphafold3/blob/main/WEIGHTS_TERMS_OF_USE.md.
+If you do not agree to these terms and are using AlphaFold 3 derived model
+parameters, cancel execution of AlphaFold 3 inference with CTRL-C, and do not
+use the model parameters.
+
+
+Running fold job TetR_homodimer...
+Output will be written in /local/af3/output/TetR_homodimer
+Running data pipeline...
+Running data pipeline for chain A...
+Running data pipeline for chain A took 781.42 seconds
+Running data pipeline for chain B...
+Running data pipeline for chain B took 0.05 seconds
+Writing model input JSON to /local/af3/output/TetR_homodimer/TetR_homodimer_data.json
+Skipping model inference...
+Fold job TetR_homodimer done, output written to /local/af3/output/TetR_homodimer
+
+Done running 1 fold jobs.
+Elapsed time: 00:13:17
