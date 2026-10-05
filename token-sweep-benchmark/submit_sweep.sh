@@ -14,13 +14,15 @@
 #   -n  dry run: print the sbatch commands only
 #   size ...  token sizes to run (default: every inputs/tokens*.json)
 #
+# Missing inputs are generated with gen_token_inputs.py.
+#
 # Set GPUS to change GPU types (default: l40s-48).
-# Set RESERVATION to change the reservation (default: GPUpscstaff).
+# Set RESERVATION to change the reservation (default: alphafold3).
 
 set -euo pipefail
 
 GPUS=${GPUS:-"l40s-48"}
-RESERVATION=${RESERVATION:-"GPUpscstaff"}
+RESERVATION=${RESERVATION:-"alphafold3"}
 account=""
 repeat="1"
 mem=0
@@ -44,8 +46,19 @@ fi
 cd "$(dirname "$(realpath "$0")")"
 mkdir -p logs
 
+# inputs/ is not tracked; generate the default sizes if they are missing.
+if ! compgen -G "inputs/tokens*.json" > /dev/null; then
+  ./gen_token_inputs.py
+fi
+
 if (( $# > 0 )); then
   sizes=("$@")
+  # Generate any requested size that does not have an input yet.
+  missing=()
+  for n in "${sizes[@]}"; do
+    [[ -f inputs/tokens$n.json ]] || missing+=("$n")
+  done
+  (( ${#missing[@]} > 0 )) && ./gen_token_inputs.py "${missing[@]}"
 else
   sizes=($(ls inputs/tokens*.json | sed 's/.*tokens\([0-9]*\)\.json/\1/' | sort -n))
 fi
