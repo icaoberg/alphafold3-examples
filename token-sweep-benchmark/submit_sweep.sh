@@ -15,10 +15,12 @@
 #   size ...  token sizes to run (default: every inputs/tokens*.json)
 #
 # Set GPUS to change GPU types (default: l40s-48).
+# Set RESERVATION to change the reservation (default: GPUpscstaff).
 
 set -euo pipefail
 
 GPUS=${GPUS:-"l40s-48"}
+RESERVATION=${RESERVATION:-"GPUpscstaff"}
 account=""
 repeat="1"
 mem=0
@@ -64,7 +66,8 @@ for n in "${sizes[@]}"; do
     tag=r$repeat
     (( mem == 1 )) && tag=$tag-mem
     name=af3-sweep-tokens$n-$gpu-$tag
-    cmd=(sbatch --parsable -A "$account" --gpus="$gpu:1" --job-name="$name"
+    cmd=(sbatch --parsable -A "$account" --reservation="$RESERVATION"
+         --gpus="$gpu:1" --job-name="$name"
          --time="$(walltime "$n")"
          --export=ALL,AF3_GPU="$gpu",AF3_REPEAT="$repeat",AF3_MEMPROFILE="$mem"
          sweep.sh "inputs/tokens$n.json")
