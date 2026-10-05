@@ -101,7 +101,7 @@ You don't need to download the containers, databases, or weights yourself.
    stage 1 to succeed:
 
    ```bash
-   cd example1
+   cd vanilla-examples/example1
    jobid=$(sbatch --parsable -A <allocation-id> stage1.sh)
    sbatch -A <allocation-id> --dependency=afterok:$jobid --kill-on-invalid-dep=yes stage2.sh
    ```
@@ -134,7 +134,7 @@ For example, to use an older image and a different output directory:
 ```bash
 export AF3_IMAGE=/ocean/containers/alphafold3/singularity-alphafold3-v3.0.3.sif
 export AF3_OUTPUT_DIR=$PROJECT/af3_output_v3.0.3
-cd example1
+cd vanilla-examples/example1
 jobid=$(sbatch --parsable -A <allocation-id> stage1.sh)
 sbatch -A <allocation-id> --dependency=afterok:$jobid --kill-on-invalid-dep=yes stage2.sh
 ```
@@ -192,7 +192,7 @@ export APPTAINERENV_XLA_CLIENT_MEM_FRACTION=3.2
 ## Input format
 
 AlphaFold 3 takes a JSON file that describes the molecules to fold. A minimal
-protein homodimer example (`example1/fold_input.json`):
+protein homodimer example (`vanilla-examples/example1/fold_input.json`):
 
 ```json
 {
@@ -233,20 +233,20 @@ Each example has its own directory with everything it needs to run:
 
 | Example | Directory | What it predicts |
 | --- | --- | --- |
-| 1 | [`example1/`](example1/) | Protein homodimer (PDB 2PV7) |
-| 2 | [`example2/`](example2/) | Protein heterodimer (barnase–barstar) |
-| 3 | [`example3/`](example3/) | Protein with ions (calmodulin + 4 Ca²⁺) |
-| 4 | [`example4/`](example4/) | Phosphorylated protein (ERK2 pThr185/pTyr187) |
-| 5 | [`example5/`](example5/) | Covalent ligand (KRAS G12C + sotorasib) |
-| 6 | [`example6/`](example6/) | Methylated double-stranded DNA |
-| 7 | [`example7/`](example7/) | Modified RNA (tRNA-like fragment) |
-| 8 | [`example8/`](example8/) | Glycoprotein (RNase B + N-glycan) |
-| 9 | [`example9/`](example9/) | Protein + ligand from SMILES (streptavidin–biotin) |
-| 10 | [`example10/`](example10/) | Protein–DNA complex (TetR dimer + tetO) |
-| 11 | [`example11/`](example11/) | Protein homodimer + ligands (TetR + tetracycline) |
-| 12 | [`example12/`](example12/) | Protein homodimer (TetR) |
-| 13 | [`example13/`](example13/) | Protein–RNA complex (U1A + RNA hairpin) |
-| 14 | [`example14/`](example14/) | Protein monomer (ubiquitin) |
+| 1 | [`vanilla-examples/example1/`](vanilla-examples/example1/) | Protein homodimer (PDB 2PV7) |
+| 2 | [`vanilla-examples/example2/`](vanilla-examples/example2/) | Protein heterodimer (barnase–barstar) |
+| 3 | [`vanilla-examples/example3/`](vanilla-examples/example3/) | Protein with ions (calmodulin + 4 Ca²⁺) |
+| 4 | [`vanilla-examples/example4/`](vanilla-examples/example4/) | Phosphorylated protein (ERK2 pThr185/pTyr187) |
+| 5 | [`vanilla-examples/example5/`](vanilla-examples/example5/) | Covalent ligand (KRAS G12C + sotorasib) |
+| 6 | [`vanilla-examples/example6/`](vanilla-examples/example6/) | Methylated double-stranded DNA |
+| 7 | [`vanilla-examples/example7/`](vanilla-examples/example7/) | Modified RNA (tRNA-like fragment) |
+| 8 | [`vanilla-examples/example8/`](vanilla-examples/example8/) | Glycoprotein (RNase B + N-glycan) |
+| 9 | [`vanilla-examples/example9/`](vanilla-examples/example9/) | Protein + ligand from SMILES (streptavidin–biotin) |
+| 10 | [`vanilla-examples/example10/`](vanilla-examples/example10/) | Protein–DNA complex (TetR dimer + tetO) |
+| 11 | [`vanilla-examples/example11/`](vanilla-examples/example11/) | Protein homodimer + ligands (TetR + tetracycline) |
+| 12 | [`vanilla-examples/example12/`](vanilla-examples/example12/) | Protein homodimer (TetR) |
+| 13 | [`vanilla-examples/example13/`](vanilla-examples/example13/) | Protein–RNA complex (U1A + RNA hairpin) |
+| 14 | [`vanilla-examples/example14/`](vanilla-examples/example14/) | Protein monomer (ubiquitin) |
 
 Each example directory contains the same three files:
 
@@ -292,7 +292,7 @@ You can also submit the stages one at a time without `--dependency`: submit
 
 ### Stage 1: data pipeline on RM-shared
 
-`example1/stage1.sh`:
+`vanilla-examples/example1/stage1.sh`:
 
 ```bash
 #!/bin/bash
@@ -391,25 +391,25 @@ slowest. These cover the data pipeline only, not inference.
 
 | Example | Job ID | RM-shared |
 | --- | --- | --- |
-| [`example6`](example6/) | 47398843 | 00:00:15 |
-| [`example12`](example12/) | 47398863 | 00:13:17 |
-| [`example10`](example10/) | 47398848 | 00:13:53 |
-| [`example11`](example11/) | 47398849 | 00:13:53 |
-| [`example1`](example1/) | 47398729 | 00:14:46 |
-| [`example3`](example3/) | 47398840 | 00:15:16 |
-| [`example5`](example5/) | 47398842 | 00:16:10 |
-| [`example14`](example14/) | 47398865 | 00:16:59 |
-| [`example4`](example4/) | 47398841 | 00:33:29 |
-| [`example9`](example9/) | 47398847 | 01:04:18 |
-| [`example7`](example7/) | 47398844 | 01:13:41 |
-| [`example13`](example13/) | 47398864 | 01:28:26 |
-| [`example8`](example8/) | 47398845 | 01:31:54 |
-| [`example2`](example2/) | 47398731 | 01:57:39 |
+| [`vanilla-examples/example6`](vanilla-examples/example6/) | 47398843 | 00:00:15 |
+| [`vanilla-examples/example12`](vanilla-examples/example12/) | 47398863 | 00:13:17 |
+| [`vanilla-examples/example10`](vanilla-examples/example10/) | 47398848 | 00:13:53 |
+| [`vanilla-examples/example11`](vanilla-examples/example11/) | 47398849 | 00:13:53 |
+| [`vanilla-examples/example1`](vanilla-examples/example1/) | 47398729 | 00:14:46 |
+| [`vanilla-examples/example3`](vanilla-examples/example3/) | 47398840 | 00:15:16 |
+| [`vanilla-examples/example5`](vanilla-examples/example5/) | 47398842 | 00:16:10 |
+| [`vanilla-examples/example14`](vanilla-examples/example14/) | 47398865 | 00:16:59 |
+| [`vanilla-examples/example4`](vanilla-examples/example4/) | 47398841 | 00:33:29 |
+| [`vanilla-examples/example9`](vanilla-examples/example9/) | 47398847 | 01:04:18 |
+| [`vanilla-examples/example7`](vanilla-examples/example7/) | 47398844 | 01:13:41 |
+| [`vanilla-examples/example13`](vanilla-examples/example13/) | 47398864 | 01:28:26 |
+| [`vanilla-examples/example8`](vanilla-examples/example8/) | 47398845 | 01:31:54 |
+| [`vanilla-examples/example2`](vanilla-examples/example2/) | 47398731 | 01:57:39 |
 | **Total** | | **09:33:56** |
 
 ### Stage 2: inference on GPU-shared
 
-`example1/stage2.sh`:
+`vanilla-examples/example1/stage2.sh`:
 
 ```bash
 #!/bin/bash
@@ -489,6 +489,34 @@ copy the results to `$AF3_OUTPUT_DIR`. If a job hits its time limit, Slurm
 allows only a short grace period before killing it, so set `--time` with some
 margin.
 
+#### Stage 2 running times
+
+Elapsed time of each example's stage 2 job on `GPU-shared`, from the
+`Elapsed time:` line at the end of its `af3-inference-<jobid>.out` log,
+fastest to slowest. These cover inference only, not the data pipeline.
+
+All of these jobs ran on a single NVIDIA L40S GPU (48 GB), requested with
+`--gpus=l40s-48:1` as in `stage2.sh` above. Times on other GPU types, such as
+the H100, will differ.
+
+| Example | Job ID | GPU-shared (L40S) |
+| --- | --- | --- |
+| [`vanilla-examples/example9`](vanilla-examples/example9/) | 47414748 | 00:01:18 |
+| [`vanilla-examples/example2`](vanilla-examples/example2/) | 47414741 | 00:01:19 |
+| [`vanilla-examples/example3`](vanilla-examples/example3/) | 47414742 | 00:01:19 |
+| [`vanilla-examples/example6`](vanilla-examples/example6/) | 47414745 | 00:01:19 |
+| [`vanilla-examples/example7`](vanilla-examples/example7/) | 47414746 | 00:01:19 |
+| [`vanilla-examples/example5`](vanilla-examples/example5/) | 47414744 | 00:01:20 |
+| [`vanilla-examples/example8`](vanilla-examples/example8/) | 47414747 | 00:01:20 |
+| [`vanilla-examples/example14`](vanilla-examples/example14/) | 47414753 | 00:01:20 |
+| [`vanilla-examples/example13`](vanilla-examples/example13/) | 47414752 | 00:01:21 |
+| [`vanilla-examples/example4`](vanilla-examples/example4/) | 47414743 | 00:01:43 |
+| [`vanilla-examples/example11`](vanilla-examples/example11/) | 47414750 | 00:01:45 |
+| [`vanilla-examples/example12`](vanilla-examples/example12/) | 47414751 | 00:01:47 |
+| [`vanilla-examples/example10`](vanilla-examples/example10/) | 47414749 | 00:01:48 |
+| [`vanilla-examples/example1`](vanilla-examples/example1/) | 47414740 | 00:02:52 |
+| **Total** | | **00:21:50** |
+
 ### Resuming after a failure
 
 AlphaFold 3 doesn't save checkpoints in the middle of a stage, but each stage's
@@ -498,7 +526,7 @@ output is kept:
   `$AF3_OUTPUT_DIR/<name>/`. Resubmit only stage 2:
 
   ```bash
-  cd example1
+  cd vanilla-examples/example1
   sbatch -A <allocation-id> stage2.sh
   ```
 
