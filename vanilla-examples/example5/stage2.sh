@@ -35,6 +35,11 @@
 # Pass the same input as stage 1. It defaults to fold_input.json in the
 # directory you submit from.
 
+# Load the AlphaFold 3 module. It sets AF3_IMAGE, AF3_DATABASES and
+# AF3_WEIGHTS, and defines run_alphafold, which runs run_alphafold.py in the
+# container with /ocean, $PROJECT and $LOCAL bound (and --nv on GPU nodes).
+module load alphafold3/3.0.4 || exit 1
+
 set -euo pipefail
 
 # Print how long the script took when it exits, even on failure.
@@ -45,9 +50,6 @@ print_elapsed() {
 }
 trap print_elapsed EXIT
 
-export AF3_ROOT=/ocean/datasets/community/alphafold3
-export AF3_IMAGE=${AF3_IMAGE:-/ocean/containers/alphafold3/singularity-alphafold3-v3.0.4.sif}
-export AF3_MODEL_DIR=${AF3_MODEL_DIR:-$AF3_ROOT/weights}
 # Results go to output/ in the directory the job was submitted from (the
 # example directory), where stage 2 reads the stage 1 output.
 export AF3_OUTPUT_DIR=${AF3_OUTPUT_DIR:-$SLURM_SUBMIT_DIR/output}
@@ -82,14 +84,9 @@ trap 'rsync -a "$AF3_SCRATCH/output/" "$AF3_OUTPUT_DIR/"; print_elapsed' EXIT
 
 export APPTAINERENV_TMPDIR="$AF3_SCRATCH/tmp"
 
-apptainer exec --nv \
-  --bind /ocean \
-  --bind "$PROJECT" \
-  --bind "$LOCAL" \
-  "$AF3_IMAGE" \
-  python /app/alphafold/run_alphafold.py \
-    --json_path="$AF3_DATA_JSON" \
-    --model_dir="$AF3_MODEL_DIR" \
-    --output_dir="$AF3_SCRATCH/output" \
-    --jax_compilation_cache_dir="$AF3_JAX_CACHE_DIR" \
-    --norun_data_pipeline
+run_alphafold \
+  --json_path="$AF3_DATA_JSON" \
+  --model_dir="$AF3_WEIGHTS" \
+  --output_dir="$AF3_SCRATCH/output" \
+  --jax_compilation_cache_dir="$AF3_JAX_CACHE_DIR" \
+  --norun_data_pipeline

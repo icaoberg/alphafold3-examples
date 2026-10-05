@@ -47,9 +47,11 @@ print_elapsed() {
 }
 trap print_elapsed EXIT
 
-export AF3_ROOT=/ocean/datasets/community/alphafold3
-export AF3_IMAGE=${AF3_IMAGE:-/ocean/containers/alphafold3/singularity-alphafold3-v3.0.4.sif}
-export AF3_DB_DIR=${AF3_DB_DIR:-$AF3_ROOT/databases}
+# Load the AlphaFold 3 module. It sets AF3_IMAGE, AF3_DATABASES and
+# AF3_WEIGHTS, and defines run_alphafold, which runs run_alphafold.py in the
+# container with /ocean, $PROJECT and $LOCAL bound (and --nv on GPU nodes).
+module load alphafold3/3.0.4 || exit 1
+
 # Results go to output/ in the directory the job was submitted from (the
 # example directory), where stage 2 reads the stage 1 output.
 export AF3_OUTPUT_DIR=${AF3_OUTPUT_DIR:-$SLURM_SUBMIT_DIR/output}
@@ -86,16 +88,11 @@ else
   # Send temporary files from the MSA tools to $LOCAL instead of /tmp.
   export APPTAINERENV_TMPDIR="$AF3_SCRATCH/tmp"
 
-  apptainer exec \
-    --bind /ocean \
-    --bind "$PROJECT" \
-    --bind "$LOCAL" \
-    "$AF3_IMAGE" \
-    python /app/alphafold/run_alphafold.py \
-      --json_path="$AF3_INPUT" \
-      --db_dir="$AF3_DB_DIR" \
-      --output_dir="$AF3_SCRATCH/output" \
-      --jackhmmer_n_cpu=8 \
-      --nhmmer_n_cpu=8 \
-      --norun_inference
+  run_alphafold \
+    --json_path="$AF3_INPUT" \
+    --db_dir="$AF3_DATABASES" \
+    --output_dir="$AF3_SCRATCH/output" \
+    --jackhmmer_n_cpu=8 \
+    --nhmmer_n_cpu=8 \
+    --norun_inference
 fi

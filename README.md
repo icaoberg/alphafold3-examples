@@ -111,29 +111,56 @@ You don't need to download the containers, databases, or weights yourself.
 
 ## Environment variables
 
-The job scripts read these environment variables and fall back to the defaults
-below. `sbatch` passes your environment to the job, so any of them you export
-before submitting the two stages are used by both.
+### The `alphafold3` module
 
-### Paths used by the examples
+Both job scripts start with `module load alphafold3/3.0.4`. The module
+([`modulefile.lua`](modulefile.lua)) sets the paths to the shared install and
+defines `run_alphafold`, a shell function that runs `run_alphafold.py` in the
+container. It binds `/ocean`, `$PROJECT` and `$LOCAL`, and adds `--nv` when
+`nvidia-smi` finds a GPU, so the same command works on `RM-shared` and
+`GPU-shared` nodes.
+
+| Variable | Value on Bridges-2 | Purpose |
+| --- | --- | --- |
+| `AF3_VERSION` | `3.0.4` | AlphaFold 3 version of the module |
+| `AF3_ROOT` | `/ocean/datasets/community/alphafold3` | Root of the shared install |
+| `AF3_IMAGES` | `/ocean/containers/alphafold3` | Directory holding the containers, one per version |
+| `AF3_IMAGE` | `$AF3_IMAGES/singularity-alphafold3-v3.0.4.sif` | Apptainer image to run |
+| `AF3_DATABASES` | `$AF3_ROOT/databases` | Passed to `--db_dir` in stage 1 |
+| `AF3_WEIGHTS` | `$AF3_ROOT/weights` | Passed to `--model_dir` in stage 2 |
+| `AF3_CODE` | `$AF3_ROOT/code/alphafold3` | AlphaFold 3 source code, for reference |
+
+You can also load the module yourself and run AlphaFold 3 from an interactive
+session:
+
+```bash
+module load alphafold3/3.0.4
+run_alphafold --helpfull
+```
+
+Because the scripts load the module, exporting `AF3_IMAGE` or the other module
+variables before `sbatch` has no effect: the module sets them again. To use a
+different AlphaFold 3 version, change the `module load` line in both scripts to
+that version's module.
+
+### Variables read by the job scripts
+
+The job scripts also read these environment variables and fall back to the
+defaults below. `sbatch` passes your environment to the job, so any of them you
+export before submitting the two stages are used by both.
 
 | Variable | Default on Bridges-2 | Purpose |
 | --- | --- | --- |
-| `AF3_ROOT` | `/ocean/datasets/community/alphafold3` | Root of the shared install |
-| `AF3_IMAGE` | `/ocean/containers/alphafold3/singularity-alphafold3-v3.0.4.sif` | Apptainer image to run |
-| `AF3_DB_DIR` | `$AF3_ROOT/databases` | Passed to `--db_dir` |
-| `AF3_MODEL_DIR` | `$AF3_ROOT/weights` | Passed to `--model_dir` |
 | `AF3_INPUT` | *(set by both job scripts)* | Input JSON file: the script's argument, or `fold_input.json` in the submit directory |
 | `AF3_NAME` | *(set by both job scripts)* | The input's `name`; used to find `<name>/<name>_data.json` |
 | `AF3_OUTPUT_DIR` | `$SLURM_SUBMIT_DIR/output` | Passed to `--output_dir`; stage 2 reads the stage 1 output from here |
 | `AF3_JAX_CACHE_DIR` | `$LOCAL/af3/jax_cache` | Passed to `--jax_compilation_cache_dir` |
 | `AF3_SCRATCH` | `$LOCAL/af3` | Node-local scratch for temporary files and in-progress output (batch jobs only) |
 
-For example, to use an older image and a different output directory:
+For example, to write the results to a different directory:
 
 ```bash
-export AF3_IMAGE=/ocean/containers/alphafold3/singularity-alphafold3-v3.0.3.sif
-export AF3_OUTPUT_DIR=$PROJECT/af3_output_v3.0.3
+export AF3_OUTPUT_DIR=$PROJECT/af3_output
 cd vanilla-examples/example1
 jobid=$(sbatch --parsable -A <allocation-id> stage1.sh)
 sbatch -A <allocation-id> --dependency=afterok:$jobid --kill-on-invalid-dep=yes stage2.sh
@@ -259,6 +286,9 @@ Each example directory contains the same three files:
 The scripts are the same in every example; only `fold_input.json` changes. To
 fold your own input, copy an example directory and replace `fold_input.json`.
 
+Running times and prediction confidence scores for every example are in
+[`vanilla-examples/README.md`](vanilla-examples/README.md).
+
 ### Submit
 
 From an example directory:
@@ -316,11 +346,19 @@ You can also submit the stages one at a time without `--dependency`: submit
 # 64 cores on one node, 1-hour default and 72-hour maximum time limit. The 32
 # cores requested above give the MSA search tools about 64 GB of memory.
 
-set -euo pipefail
+# Print how long the script took when it exits, even on failure.
+SECONDS=0
+print_elapsed() {
+  printf 'Elapsed time: %02d:%02d:%02d\n' \
+    $((SECONDS / 3600)) $((SECONDS % 3600 / 60)) $((SECONDS % 60))
+}
+trap print_elapsed EXIT
 
-export AF3_ROOT=/ocean/datasets/community/alphafold3
-export AF3_IMAGE=${AF3_IMAGE:-/ocean/containers/alphafold3/singularity-alphafold3-v3.0.4.sif}
-export AF3_DB_DIR=${AF3_DB_DIR:-$AF3_ROOT/databases}
+# Load the AlphaFold 3 module. It sets AF3_IMAGE, AF3_DATABASES and
+# AF3_WEIGHTS, and defines run_alphafold, which runs run_alphafold.py in the
+# container with /ocean, $PROJECT and $LOCAL bound (and --nv on GPU nodes).
+module load alphafold3/3.0.4 || exit 1
+
 # Results go to output/ in the directory the job was submitted from (the
 # example directory), where stage 2 reads the stage 1 output.
 export AF3_OUTPUT_DIR=${AF3_OUTPUT_DIR:-$SLURM_SUBMIT_DIR/output}
@@ -352,23 +390,18 @@ else
   mkdir -p "$AF3_SCRATCH/output" "$AF3_SCRATCH/tmp"
 
   # Copy results from $LOCAL to $AF3_OUTPUT_DIR when the script exits, even on failure.
-  trap 'rsync -a "$AF3_SCRATCH/output/" "$AF3_OUTPUT_DIR/"' EXIT
+  trap 'rsync -a "$AF3_SCRATCH/output/" "$AF3_OUTPUT_DIR/"; print_elapsed' EXIT
 
   # Send temporary files from the MSA tools to $LOCAL instead of /tmp.
   export APPTAINERENV_TMPDIR="$AF3_SCRATCH/tmp"
 
-  apptainer exec \
-    --bind /ocean \
-    --bind "$PROJECT" \
-    --bind "$LOCAL" \
-    "$AF3_IMAGE" \
-    python /app/alphafold/run_alphafold.py \
-      --json_path="$AF3_INPUT" \
-      --db_dir="$AF3_DB_DIR" \
-      --output_dir="$AF3_SCRATCH/output" \
-      --jackhmmer_n_cpu=8 \
-      --nhmmer_n_cpu=8 \
-      --norun_inference
+  run_alphafold \
+    --json_path="$AF3_INPUT" \
+    --db_dir="$AF3_DATABASES" \
+    --output_dir="$AF3_SCRATCH/output" \
+    --jackhmmer_n_cpu=8 \
+    --nhmmer_n_cpu=8 \
+    --norun_inference
 fi
 ```
 
@@ -429,14 +462,25 @@ slowest. These cover the data pipeline only, not inference.
 # Pass the same input as stage 1. It defaults to fold_input.json in the
 # directory you submit from.
 
+# Load the AlphaFold 3 module. It sets AF3_IMAGE, AF3_DATABASES and
+# AF3_WEIGHTS, and defines run_alphafold, which runs run_alphafold.py in the
+# container with /ocean, $PROJECT and $LOCAL bound (and --nv on GPU nodes).
+module load alphafold3/3.0.4 || exit 1
+
 set -euo pipefail
 
-export AF3_ROOT=/ocean/datasets/community/alphafold3
-export AF3_IMAGE=${AF3_IMAGE:-/ocean/containers/alphafold3/singularity-alphafold3-v3.0.4.sif}
-export AF3_MODEL_DIR=${AF3_MODEL_DIR:-$AF3_ROOT/weights}
+# Print how long the script took when it exits, even on failure.
+SECONDS=0
+print_elapsed() {
+  printf 'Elapsed time: %02d:%02d:%02d\n' \
+    $((SECONDS / 3600)) $((SECONDS % 3600 / 60)) $((SECONDS % 60))
+}
+trap print_elapsed EXIT
+
 # Results go to output/ in the directory the job was submitted from (the
 # example directory), where stage 2 reads the stage 1 output.
 export AF3_OUTPUT_DIR=${AF3_OUTPUT_DIR:-$SLURM_SUBMIT_DIR/output}
+mkdir -p "$AF3_OUTPUT_DIR"
 
 # Slurm runs a copy of this script, so find files relative to the directory
 # the job was submitted from.
@@ -463,21 +507,16 @@ export AF3_JAX_CACHE_DIR=${AF3_JAX_CACHE_DIR:-$AF3_SCRATCH/jax_cache}
 mkdir -p "$AF3_SCRATCH/output" "$AF3_SCRATCH/tmp" "$AF3_JAX_CACHE_DIR"
 
 # Copy results from $LOCAL to $AF3_OUTPUT_DIR when the script exits, even on failure.
-trap 'rsync -a "$AF3_SCRATCH/output/" "$AF3_OUTPUT_DIR/"' EXIT
+trap 'rsync -a "$AF3_SCRATCH/output/" "$AF3_OUTPUT_DIR/"; print_elapsed' EXIT
 
 export APPTAINERENV_TMPDIR="$AF3_SCRATCH/tmp"
 
-apptainer exec --nv \
-  --bind /ocean \
-  --bind "$PROJECT" \
-  --bind "$LOCAL" \
-  "$AF3_IMAGE" \
-  python /app/alphafold/run_alphafold.py \
-    --json_path="$AF3_DATA_JSON" \
-    --model_dir="$AF3_MODEL_DIR" \
-    --output_dir="$AF3_SCRATCH/output" \
-    --jax_compilation_cache_dir="$AF3_JAX_CACHE_DIR" \
-    --norun_data_pipeline
+run_alphafold \
+  --json_path="$AF3_DATA_JSON" \
+  --model_dir="$AF3_WEIGHTS" \
+  --output_dir="$AF3_SCRATCH/output" \
+  --jax_compilation_cache_dir="$AF3_JAX_CACHE_DIR" \
+  --norun_data_pipeline
 ```
 
 The script requests one L40S GPU (48 GB), which runs the default `triton`
@@ -555,7 +594,7 @@ sees the existing `_data.json` and skips the data pipeline.
 | `--max_template_date` | Exclude templates released after this date |
 | `--save_embeddings`, `--save_distogram` | Write extra model outputs |
 
-Run `python /app/alphafold/run_alphafold.py --helpfull` inside the container to
+Run `run_alphafold --helpfull` after `module load alphafold3/3.0.4` to
 list every flag.
 
 ## GPU notes for Bridges-2
@@ -603,7 +642,9 @@ for how to interpret the confidence metrics.
 | Triton/cuDNN attention errors | The job landed on an older GPU; check that `--gpus` is `l40s-48:1` or `h100-80:1` |
 | Long time before inference starts | JAX compiles the model at the start of each job when the cache is on `$LOCAL`. Point `AF3_JAX_CACHE_DIR` at `$PROJECT` so later jobs reuse it |
 | No `af3-inference` job after `af3-data` finished | The data pipeline failed, so Slurm cancelled stage 2. Check `af3-data-<jobid>.out`, fix the problem, and submit both stages again |
-| `No such file or directory` for `/ocean/...` inside the container | Add `--bind /ocean` (and `--bind $PROJECT`) to `apptainer exec` ([bind paths docs](https://apptainer.org/docs/user/latest/bind_paths_and_mounts.html)) |
+| `Failed to find the following module(s): "alphafold3"` | The module isn't on your `MODULEPATH`. Check `module avail alphafold3`, or add its directory with `module use <dir>` |
+| `AlphaFold 3 container not found` when loading the module | The module's `.sif` file is missing from `$AF3_IMAGES`; load a version listed by `ls /ocean/containers/alphafold3` |
+| `No such file or directory` for `/ocean/...` inside the container | `run_alphafold` binds `/ocean`, `$PROJECT` and `$LOCAL`. If you call `apptainer exec` yourself, add `--bind /ocean` (and `--bind $PROJECT`) ([bind paths docs](https://apptainer.org/docs/user/latest/bind_paths_and_mounts.html)) |
 | Disk quota exceeded | Write outputs and caches to `$PROJECT`, not `$HOME` |
 
 For Bridges-2 problems, contact PSC support at
