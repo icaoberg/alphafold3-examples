@@ -11,7 +11,7 @@
 #SBATCH --output=logs/%x-%j.out
 
 # Token-size sweep: inference only on one synthetic input (empty MSA and
-# templates), on one GPU. Adapted from ../stage2.sh.
+# templates), on one GPU. Adapted from ../gpu-benchmarks/example1/stage2.sh.
 #
 # Usually submitted by submit_sweep.sh. By hand:
 #   AF3_GPU=l40s-48 AF3_REPEAT=1 sbatch -A <allocation-id> \
