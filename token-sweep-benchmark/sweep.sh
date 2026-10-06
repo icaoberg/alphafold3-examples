@@ -30,10 +30,6 @@
 # AF3_MEMPROFILE=1 also turns off preallocation, as a cross-check against
 # nvidia-smi. Not needed for normal runs.
 
-# Load the AlphaFold 3 module. It sets AF3_IMAGE and AF3_WEIGHTS. run_alphafold
-# can't run the memory-stats wrapper below, so call apptainer exec directly.
-module load alphafold3/3.0.4 || exit 1
-
 set -euo pipefail
 
 SECONDS=0
@@ -49,6 +45,9 @@ if [[ $# -ne 1 ]]; then
   exit 2
 fi
 
+export AF3_ROOT=/ocean/datasets/community/alphafold3
+export AF3_IMAGE=${AF3_IMAGE:-/ocean/containers/alphafold3/singularity-alphafold3-v3.0.4.sif}
+export AF3_MODEL_DIR=${AF3_MODEL_DIR:-$AF3_ROOT/weights}
 
 export AF3_INPUT=$(realpath "$1")
 export AF3_NAME=$(basename "$AF3_INPUT" .json)   # e.g. tokens1024
@@ -80,7 +79,7 @@ echo "Benchmark gpu memory: $AF3_GPU_MEMORY"
 echo "Benchmark repeat: $AF3_REPEAT"
 echo "Benchmark attention: $AF3_ATTENTION"
 echo "Benchmark memprofile: $AF3_MEMPROFILE"
-echo "Benchmark model dir: $AF3_WEIGHTS"
+echo "Benchmark model dir: $AF3_MODEL_DIR"
 echo "Benchmark node: $(hostname -s)"
 echo "Benchmark job id: ${SLURM_JOB_ID:-none}"
 echo "Benchmark start: $(date -Is)"
@@ -147,7 +146,7 @@ apptainer exec --nv \
   "$AF3_IMAGE" \
   python "$wrapper" /app/alphafold/run_alphafold.py \
     --json_path="$AF3_INPUT" \
-    --model_dir="$AF3_WEIGHTS" \
+    --model_dir="$AF3_MODEL_DIR" \
     --output_dir="$AF3_SCRATCH/output" \
     --jax_compilation_cache_dir="$AF3_JAX_CACHE_DIR" \
     --flash_attention_implementation="$AF3_ATTENTION" \
