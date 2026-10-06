@@ -1,169 +1,135 @@
-# Cancer Biomarker Discovery
+# Token-size sweep benchmark
 
-![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
-![R](https://img.shields.io/badge/R-4.0+-blue.svg)
-![uv](https://img.shields.io/badge/uv-package%20manager-green.svg)
-![License](https://img.shields.io/badge/license-MIT-green.svg)
+Times AlphaFold 3 inference (stage 2 only) on synthetic inputs covering every
+default compilation bucket from 256 to 5,120 tokens on Bridges-2
+`GPU-shared`, on V100 (`v100-32`), L40S (`l40s-48`, in the `alphafold3`
+reservation) and H100 (`h100-80`), five rounds each. The goal is
+to see how runtime and GPU memory scale with input size, and the largest input
+each GPU can run.
 
-A comprehensive bioinformatics pipeline for cancer subtyping and discovering cancer biomarkers using RNA-seq data from The Cancer Genome Atlas (TCGA). This project leverages machine learning and statistical methods to identify potential diagnostic and prognostic markers.
+This complements `../gpu-benchmarks/`, which times the 14 real examples on the
+same GPUs. Those examples have fixed sizes, and every run includes JAX
+compilation. This sweep varies the size and separates compilation from
+compute.
 
-## Contributors
+## Inputs
 
-River Zhu, Zoey (zhaoyiyou.zoey@gmail.com), Arunannamalai Sujatha Bharath Raj (asujatha@andrew.cmu.edu), Qiyu (Charlie) Yang (qiyuy@andrew.cmu.edu), Diya Patidar (dpatidar@andrew.cmu.edu), Ana Ferreira (bossanblues@gmail.com), Xinru Zhang, Isha Parikh(parikh.i@northeastern.edu), Aryan Sharan Guda, Seohyun Lee (seohyun4@andrew.cmu.edu), Yosen Lin (yosenl@andrew.cmu.edu), Seungjin Han (seungjih@andrew.cmu.edu), Andrew Scouten (yzb2@txstate.edu), Jeffrey Wang (jdw2@andrew.cmu.edu)
+`gen_token_inputs.py` writes `inputs/tokens<N>.json` for N = 256, 512, 768,
+1024, 1280, 1536, 2048, 2560, 3072, 3584, 4096, 4608 and 5120 (the default
+buckets in `run_alphafold.py`, so no input is padded):
 
-## Table of Contents
+- A single protein chain of N random amino acids. Standard amino acids are one
+  token each, so the input has exactly N tokens.
+- Each size uses its own fixed random seed, so the inputs are identical every
+  time they are generated. `inputs/` is not tracked by git.
+- Empty MSA and templates, so the input runs with `--norun_data_pipeline` and
+  needs no stage 1. Runtime depends on the token count, not the sequence, so
+  the predicted structures are meaningless but the timings are valid.
+- Two model seeds. Seed 1 includes JAX compilation (**cold**); seed 2 reuses
+  the compiled model (**warm**). The warm time is the one to compare with
+  DeepMind's compile-free timings in AlphaFold 3's `docs/performance.md`.
 
-- [Getting Started](#getting-started)
-- [Usage](#usage)
-- [AI Disclosure](#ai-disclosure)
-- [License](#license)
+Other sizes can be passed as arguments, e.g. `./gen_token_inputs.py 6144`.
+Sizes above 5,120 need their own compilation bucket and will most likely run
+out of memory without unified memory.
 
-## Methods
+## Run it
 
-### Traditional ML Team
+From this directory:
 
-![ML_Flowchart](./docs/assets/Breast-XGBoost.png)
-
-### DL Transformer Team
-![T_Flowchart](./docs/assets/transformer_flowchart.png)
-
-### Multi-Modal Team
-
-![Multi-Modal_Flowchart](./docs/assets/dl_breast_cancer_flowchart.png)
-![Multi-Modal_Flowchart](./docs/assets/multimodal_fed.png)
-
-
-
-## Getting Started
-
-### Prerequisites
-
-This project supports two installation methods:
-
-**Option A: Docker (Recommended)**
-- Docker Desktop or Docker Engine
-- Docker Compose
-- VSCode with Dev Containers extension (optional but recommended)
-
-**Option B: Local Installation**
-- Python 3.10+
-- R 4.0+
-- [uv](https://github.com/astral-sh/uv) - Fast Python package installer and resolver
-
----
-
-### Option A: Docker Installation (Recommended)
-
-Docker provides a consistent development environment and eliminates dependency and compatibility issues.
-
-1. **Install Docker Desktop**:
-   - Download from [docker.com](https://www.docker.com/products/docker-desktop/)
-   - Or install Docker Engine on Linux
-
-2. **Clone the repository**:
-   ```bash
-   git clone <repository-url>
-   cd Cancer_biomarker_discovery
-   ```
-
-3. **Start the environment**:
-   ```bash
-   # Build and start the container
-   docker compose up -d
-   ```
-
-4. **Open in VSCode Dev Container** (optional):
-   - Install the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
-   - Press `F1` → "Dev Containers: Reopen in Container"
-   - VSCode will connect to the container with all extensions and tools configured
-   - Jupyter notebooks (`.ipynb` files) will work natively in VSCode without a browser
-
-**Useful Docker Commands**:
 ```bash
-# Stop containers
-docker compose down
+chmod +x *.sh *.py
+export AF3_MODEL_DIR=<directory containing af3.bin>
 
-# Rebuild after dependency changes
-docker compose build
-
-# Execute commands in container
-docker compose exec dev bash
-
-# Add new Python packages
-docker compose exec dev uv add <package-name>
-
-# View running containers
-docker compose ps
+./submit_sweep.sh -A <allocation-id> -r 1 -R 5 -n   # dry run: print sbatch only
+./submit_sweep.sh -A <allocation-id> -r 1 -R 5      # 5 rounds x 13 sizes x 3 GPUs
 ```
 
----
+- All five rounds are queued at once, but never overlap: each round depends
+  (`--dependency=afterany`) on every job of the round before it, including
+  jobs of that round already in the queue, so runs don't share nodes with
+  each other. `-r 3 -R 5` queues only rounds 3 to 5, and `-r 2` alone queues
+  one round.
+- Runs that already succeeded, are queued, or ran out of memory are skipped,
+  so resubmitting a round only retries runs that failed for other reasons.
+- Missing inputs are generated with `gen_token_inputs.py`, so it doesn't need
+  to be run first.
+- Pass sizes to run only those (`./submit_sweep.sh -A <id> -r 1 256 512`).
+- Set `GPUS` to change the GPU types (`GPUS="l40s-48" ./submit_sweep.sh ...`).
+- The `RESERVATION` (default `alphafold3`) is used only for the GPU types in
+  `RESERVATION_GPUS` (default `l40s-48`); the others are submitted without it.
+  Set `RESERVATION=` to never use one.
+- Wall-time limits scale with size, from 30 minutes up to 4 hours, doubled on
+  V100.
 
-### Option B: Local Installation
+Then collect and plot:
 
-1. **Install uv** (if not already installed) from [here](https://docs.astral.sh/uv/getting-started/installation/).
+```bash
+./collect_sweep.py
+./plot_sweep.py
+```
 
-2. **Clone the repository**:
-   ```bash
-   git clone <repository-url>
-   cd Cancer_biomarker_discovery
-   ```
+Commit `sweep_results.csv`, `sweep_summary.csv` and `plots/` to keep the
+numbers. Logs and `output/` are not tracked by git.
 
-3. **Install Python dependencies**:
-   ```bash
-   # Install base dependencies
-   uv sync
+## What gets recorded
 
-   # Or install with PyTorch extras (choose one based on your hardware):
-   uv sync --extra cpu          # CPU-only version
-   uv sync --extra cu128        # CUDA 12.8
-   uv sync --extra cu130        # CUDA 13.0
-   uv sync --extra rocm         # AMD ROCm
-   ```
+Each job writes `logs/af3-sweep-tokens<N>-<gpu>-r<repeat>[-mem]-<jobid>.out`,
+and its outputs go to `output/tokens<N>/<gpu>/r<repeat>[-mem]/`.
 
-4. **Install R dependencies with renv**:
-   ```r
-   # Install renv if not already installed
-   install.packages("renv")
+`sweep_results.csv` has one row per run:
 
-   # Restore R package dependencies
-   renv::restore()
-   ```
+| Column | Source |
+| --- | --- |
+| `cold_seconds` | Seed 1 `Running model inference ... took` line: compilation plus compute |
+| `warm_seconds` | Seed 2: compute only, comparable to DeepMind's table |
+| `compile_seconds` | `cold_seconds - warm_seconds` |
+| `featurisation_seconds` | `Featurising data ... took` (CPU work, not the GPU) |
+| `peak_gpu_mem_mib` | JAX `peak_bytes_in_use`: real peak memory inside XLA's pool |
+| `smi_peak_mib` | Highest `nvidia-smi` reading (only the 95% preallocation unless `-m`) |
+| `status` | `ok`, `oom`, `timeout`, `failed`, or `incomplete` |
+| `attention` | `triton`, or `xla` on V100 |
 
----
+`sweep_summary.csv` has one row per GPU and size: median timings over the
+successful runs (timings from timing runs, memory from any run), and
+DeepMind's A100/H100 timings where a size matches their table.
 
-### Recommended VSCode Extensions
+`plot_sweep.py` writes:
 
-For the best development experience, we recommend installing the following VSCode extensions:
+- `plots/sweep_runtime.png`: warm time vs tokens per GPU, with DeepMind's
+  A100/H100 timings and OOM points
+- `plots/sweep_compile.png`: cold vs warm time (compilation overhead)
+- `plots/sweep_memory.png`: real peak memory vs tokens, against each card's
+  capacity
 
-- **[Python](https://marketplace.visualstudio.com/items?itemName=ms-python.python)** (`ms-python.python`) - IntelliSense, debugging, and linting for Python
-- **[Ruff](https://marketplace.visualstudio.com/items?itemName=charliermarsh.ruff)** (`charliermarsh.ruff`) - Fast Python linter and formatter
-- **[autopep8](https://marketplace.visualstudio.com/items?itemName=ms-python.autopep8)** (`ms-python.autopep8`) - Python code formatter following PEP 8 style guide
-- **[R](https://marketplace.visualstudio.com/items?itemName=REditorSupport.r)** (`REditorSupport.r`) - R language support with syntax highlighting and code execution
-- **[Jupyter](https://marketplace.visualstudio.com/items?itemName=ms-toolsai.jupyter)** (`ms-toolsai.jupyter`) - Interactive Jupyter notebook support
-- **[Dev Containers](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)** (`ms-vscode-remote.remote-containers`) - For Docker development (if using Docker)
+## GPU memory
 
----
+XLA preallocates 95% of GPU memory when the job starts, so `nvidia-smi` shows
+roughly the whole card whatever the input size. That number is kept as
+`smi_peak_mib` but says nothing about the input.
 
-## Usage
+Instead, `sweep.sh` runs `run_alphafold.py` through a small wrapper that, when
+the run ends (even after an error), prints JAX's own `peak_bytes_in_use` for
+the GPU: the most memory actually used inside the preallocated pool. This is
+`peak_gpu_mem_mib`, recorded in every run without changing the timings.
+`jax_limit_mib` is the size of the pool.
 
-### Running Analysis Notebooks
+`-m` additionally turns off preallocation (`XLA_PYTHON_CLIENT_PREALLOCATE=false`)
+as a cross-check against `nvidia-smi`. It isn't needed for normal runs.
 
-- **Notebooks**: Located in [`notebooks/`](notebooks/data/)
-- **Scripts**: Located in [`scripts/`](scripts/data/)
+## V100 runs
 
-Open notebooks in VSCode or Jupyter Lab and execute cells sequentially.
+As in `../gpu-benchmarks/`, `sweep.sh` uses XLA attention and adds
+`--xla_disable_hlo_passes=custom-kernel-fusion-rewriter` to `XLA_FLAGS` when
+`nvidia-smi` reports a V100. DeepMind reports a limit of about 1,280 tokens
+on V100 with unified memory, which is not enabled here, so larger sizes are
+expected to be `oom`.
 
-### Data Organization
+## Limitations
 
-TCGA data is organized by cohort:
-- `data/GDCdata/TCGA-LUAD/` - Lung Adenocarcinoma
-- `data/GDCdata/TCGA-LUSC/` - Lung Squamous Cell Carcinoma
-- `data/GDCdata/TCGA-MESO/` - Mesothelioma
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## AI Disclosure
-
-Artificial intelligence tools, including large language models (LLMs), were used during the development of this project to support writing, clarify technical concepts, and assist in generating code snippets. These tools served as an aid for idea refinement, debugging, and improving the readability of explanations and documentation. All AI-generated text and code were thoroughly reviewed, verified for correctness, and understood in full before being incorporated into this work. The responsibility for all final decisions, interpretations, and implementations remains solely with the contributors.
+- No MSA. Real inputs with deep MSAs do extra work in the MSA module, so these
+  timings slightly underestimate real proteins of the same size.
+- Single protein chain only. Ligands, nucleic acids and multiple chains are
+  not covered.
+- Unified memory is not enabled, so inputs too large for a GPU are recorded as
+  `oom` rather than run more slowly.
