@@ -8,8 +8,15 @@ the `stage1.sh` script in its directory:
 | --- | --- | --- |
 | 1: data pipeline | `RM-shared` | 32 cores (about 64 GB of memory) |
 
+Before running AlphaFold 3, each job copies the databases its input needs
+from Ocean to node-local storage (`$LOCAL`) and sets `AF3_DATABASES` to the
+copy, so the searches read from local disk. Protein inputs copy about 580 GB
+(the five protein databases and `mmcif_files`), and RNA inputs another 95 GB.
+
 The job logs (`af3-data-<jobid>_N.out`) and the `output/` directories are
-written to each example directory.
+written to each example directory. Each log records the time spent copying
+each database, the total copy time (`Database copy seconds`), and the time
+spent running AlphaFold 3 (`AlphaFold 3 seconds`).
 
 ## Run all examples
 
@@ -46,24 +53,13 @@ only failed replicates. See the comments in `submit.sh` for all options.
 
 ## Results
 
-Once the jobs finish, collect the timings and plot them:
+Once the jobs finish, collect the timings:
 
 ```bash
 ./collect_results.py    # writes results.csv, one row per replicate
-./plot_results.py       # writes plots/
 ```
 
-`collect_results.py` reads the job logs and adds each job's node and start
-and end times from `sacct`. `results.csv` records, per replicate, the wall
-time, the time spent searching each database, and the MSA depth.
-
-| Plot | What it shows |
-| --- | --- |
-| [`plots/walltime.png`](plots/walltime.png) | Wall time of every replicate per example |
-| [`plots/databases.png`](plots/databases.png) | Time spent searching each database |
-| [`plots/timeline.png`](plots/timeline.png) | When each replicate ran, and on which node |
-
-In the run from 2026-10-07, all 70 replicates finished. Most examples take
-about 15 minutes, but 18 replicates took 1 to 4.7 hours on the same inputs.
-The extra time is spent in the jackhmmer searches of UniRef90, UniProt and
-MGnify; template search takes seconds.
+`results.csv` records, per replicate, the copy time, the AlphaFold 3 time,
+the time spent searching each database, and the node the job ran on (from
+`sacct`). The script also prints the median copy and AlphaFold 3 time per
+example.

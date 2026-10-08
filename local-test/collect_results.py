@@ -26,7 +26,8 @@ Usage, from this directory:
 
 Reads every example*/af3-data-*.out written by stage1.sh, adds the node and
 start and end times of each job from sacct, writes one row per replicate, and
-prints the median and maximum wall time per example.
+prints the median time per example spent copying the databases to $LOCAL and
+running AlphaFold 3.
 """
 
 import argparse
@@ -50,7 +51,8 @@ DATABASES = {
 
 FIELDS = [
     "example", "replicate", "job_id", "status", "node", "start", "end",
-    "elapsed_seconds", "msa_seconds", "template_seconds",
+    "elapsed_seconds", "copy_seconds", "alphafold_seconds", "msa_seconds",
+    "template_seconds",
     *(f"{db}_seconds" for db in DATABASES),
     "protein_chains", "unpaired_sequences", "paired_sequences", "templates",
     "log",
@@ -59,6 +61,8 @@ FIELDS = [
 LOG_NAME = re.compile(r"af3-data-(\d+)_(\d+)\.out$")
 REPLICATE = re.compile(r"^Replicate: (\d+)$")
 ELAPSED = re.compile(r"^Elapsed time: (\d+):(\d\d):(\d\d)$")
+COPY = re.compile(r"^Database copy seconds: (\d+)$")
+ALPHAFOLD = re.compile(r"^AlphaFold 3 seconds: (\d+)$")
 FINISHED = re.compile(r"Finished (?:Jackhmmer|Hmmsearch) \((.+?)\) in "
                       r"([\d.]+) seconds")
 MSA = re.compile(r"Getting protein MSAs took ([\d.]+) seconds")
@@ -85,6 +89,10 @@ def parse(log):
         elif m := ELAPSED.match(line):
             h, mi, s = map(int, m.groups())
             elapsed = h * 3600 + mi * 60 + s
+        elif m := COPY.match(line):
+            row["copy_seconds"] = m.group(1)
+        elif m := ALPHAFOLD.match(line):
+            row["alphafold_seconds"] = m.group(1)
         elif m := FINISHED.search(line):
             for db, prefix in DATABASES.items():
                 if m.group(1).startswith(prefix):
@@ -164,17 +172,23 @@ def main():
         writer.writerows(rows)
     print(f"Wrote {len(rows)} replicates to {args.output}")
 
-    times = defaultdict(list)
+    columns = ["elapsed_seconds", "copy_seconds", "alphafold_seconds"]
+    times = defaultdict(lambda: defaultdict(list))
     for r in rows:
-        if r["status"] == "ok" and r["elapsed_seconds"]:
-            times[r["example"]].append(int(r["elapsed_seconds"]) / 60)
+        if r["status"] == "ok":
+            for c in columns:
+                if r.get(c):
+                    times[r["example"]][c].append(int(r[c]) / 60)
     if times:
-        print("\nWall time in minutes (successful replicates):\n")
-        print(f"{'example':<10}{'n':>4}{'median':>10}{'max':>10}")
+        print("\nMedian minutes (successful replicates):\n")
+        print(f"{'example':<10}{'n':>4}{'total':>10}{'copy':>10}"
+              f"{'alphafold':>11}")
         for e in sorted(times, key=example_number):
             t = times[e]
-            print(f"{e:<10}{len(t):>4}{statistics.median(t):>10.1f}"
-                  f"{max(t):>10.1f}")
+            cells = [f"{statistics.median(t[c]):.1f}" if t[c] else "-"
+                     for c in columns]
+            print(f"{e:<10}{len(t['elapsed_seconds']):>4}{cells[0]:>10}"
+                  f"{cells[1]:>10}{cells[2]:>11}")
 
     failed = [r for r in rows if r["status"] != "ok"]
     if failed:

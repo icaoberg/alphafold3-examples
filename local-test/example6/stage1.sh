@@ -41,6 +41,16 @@
 # RM-shared (Bridges-2 User Guide): 2 GB of memory per core requested, up to
 # 64 cores on one node, 1-hour default and 72-hour maximum time limit. The 32
 # cores requested above give the MSA search tools about 64 GB of memory.
+#
+# Before running AlphaFold 3, the job copies the databases the input needs
+# from $AF3_DATABASES on Ocean to node-local storage ($LOCAL) and points
+# AF3_DATABASES at the copy, so the MSA and template searches read from
+# local disk. The log records how long the copy and AlphaFold 3 each took:
+#   Copied <database> (<size>) in <seconds> seconds
+#   Database copy seconds: <seconds>
+#   AlphaFold 3 seconds: <seconds>
+# Protein chains need about 580 GB (the five protein databases and
+# mmcif_files) and RNA chains about 95 GB, so check that $LOCAL has room.
 
 # Print how long the script took when it exits, even on failure.
 SECONDS=0
@@ -95,11 +105,54 @@ else
   # Send temporary files from the MSA tools to $LOCAL instead of /tmp.
   export APPTAINERENV_TMPDIR="$AF3_SCRATCH/tmp"
 
+  # The databases each chain type is searched against. DNA chains and
+  # ligands aren't searched.
+  protein_dbs=(uniref90_2022_05.fa mgy_clusters_2022_05.fa
+               bfd-first_non_consensus_sequences.fasta uniprot_all_2021_04.fa
+               pdb_seqres_2022_09_28.fasta mmcif_files)
+  rna_dbs=(rfam_14_9_clust_seq_id_90_cov_80_rep_seq.fasta
+           rnacentral_active_seq_id_90_cov_80_linclust.fasta
+           nt_rna_2023_02_23_clust_seq_id_90_cov_80_rep_seq.fasta)
+
+  # Chain types in the input, e.g. "protein rna".
+  chain_types=$(apptainer exec "$AF3_IMAGE" python3 -c '
+import json, sys
+seqs = json.load(open(sys.argv[1]))["sequences"]
+print(" ".join(sorted({k for s in seqs for k in s})))
+' "$AF3_INPUT")
+  dbs=()
+  [[ " $chain_types " == *" protein "* ]] && dbs+=("${protein_dbs[@]}")
+  [[ " $chain_types " == *" rna "* ]] && dbs+=("${rna_dbs[@]}")
+
+  # Copy the databases to $LOCAL, timing each one and the whole copy.
+  ocean_databases=$AF3_DATABASES
+  export AF3_DATABASES="$AF3_SCRATCH/databases"
+  mkdir -p "$AF3_DATABASES"
+  echo "Chain types: $chain_types"
+  echo "Copying ${#dbs[@]} database(s) from $ocean_databases to $AF3_DATABASES"
+  copy_start=$SECONDS
+  for db in "${dbs[@]}"; do
+    start=$(date +%s.%N)
+    cp -r "$ocean_databases/$db" "$AF3_DATABASES/" || exit 1
+    end=$(date +%s.%N)
+    size=$(du -sh --apparent-size "$AF3_DATABASES/$db" | cut -f1)
+    printf 'Copied %s (%s) in %.1f seconds\n' "$db" "$size" \
+      "$(echo "$end - $start" | bc)"
+  done
+  echo "Database copy seconds: $((SECONDS - copy_start))"
+  df -h "$AF3_DATABASES"
+
+  # Databases the input doesn't need aren't copied; --db_dir falls back to
+  # Ocean for them because AlphaFold 3 checks that every database exists.
+  # They are never searched.
+  af3_start=$SECONDS
   run_alphafold \
     --json_path="$AF3_INPUT" \
     --db_dir="$AF3_DATABASES" \
+    --db_dir="$ocean_databases" \
     --output_dir="$AF3_SCRATCH/output" \
     --jackhmmer_n_cpu=8 \
     --nhmmer_n_cpu=8 \
     --norun_inference
+  echo "AlphaFold 3 seconds: $((SECONDS - af3_start))"
 fi
