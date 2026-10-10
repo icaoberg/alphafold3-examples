@@ -24,16 +24,21 @@
 #SBATCH --gpus=l40s-48:1
 #SBATCH --ntasks-per-node=5
 #SBATCH --time=02:00:00
-#SBATCH --output=%x-%j.out
+#SBATCH --array=1-5
+#SBATCH --output=%x-%A_%a.out
 
 # Stage 2 of 2: predict the structure from the stage 1 output on one GPU.
 #
-# Usage, from this directory, after stage1.sh finishes (or with
-# --dependency=afterok:<stage 1 job id>, see stage1.sh):
+# stage1.sh submits this script itself, depending on the stage 1 job. To run
+# it on its own, from this directory, after stage1.sh finishes:
 #   sbatch -A <allocation-id> stage2.sh [input.json]
 #
 # Pass the same input as stage 1. It defaults to fold_input.json in the
 # directory you submit from.
+#
+# Like stage 1, this is a job array with 5 tasks: task N predicts from
+# output/replicate-N/ and writes its results there. Use the same --array as
+# stage 1.
 
 # Load the AlphaFold 3 module. It sets AF3_IMAGE, AF3_DATABASES and
 # AF3_WEIGHTS, and defines run_alphafold, which runs run_alphafold.py in the
@@ -50,9 +55,12 @@ print_elapsed() {
 }
 trap print_elapsed EXIT
 
-# Results go to output/ in the directory the job was submitted from (the
-# example directory), where stage 2 reads the stage 1 output.
-export AF3_OUTPUT_DIR=${AF3_OUTPUT_DIR:-$SLURM_SUBMIT_DIR/output}
+# Results go to output/replicate-N/ in the directory the job was submitted
+# from (the example directory), where stage 2 reads the stage 1 output. N is
+# the array task ID (1 when the script isn't run as an array). If you set
+# AF3_OUTPUT_DIR, replicate-N/ is created inside it.
+export AF3_REPLICATE=${SLURM_ARRAY_TASK_ID:-1}
+export AF3_OUTPUT_DIR=${AF3_OUTPUT_DIR:-$SLURM_SUBMIT_DIR/output}/replicate-$AF3_REPLICATE
 mkdir -p "$AF3_OUTPUT_DIR"
 
 # Slurm runs a copy of this script, so find files relative to the directory

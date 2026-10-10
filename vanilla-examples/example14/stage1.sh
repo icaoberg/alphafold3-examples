@@ -23,17 +23,27 @@
 #SBATCH --partition=RM-shared
 #SBATCH --ntasks-per-node=32
 #SBATCH --time=12:00:00
-#SBATCH --output=%x-%j.out
+#SBATCH --array=1-5
+#SBATCH --output=%x-%A_%a.out
 
 # Stage 1 of 2: build MSAs and find templates on RM-shared (CPU only).
 # Stage 2 (stage2.sh) runs inference on GPU-shared.
 #
-# Usage, from this directory, submitting stage 2 to start after this succeeds:
-#   jobid=$(sbatch --parsable -A <allocation-id> stage1.sh [input.json])
-#   sbatch -A <allocation-id> --dependency=afterok:$jobid --kill-on-invalid-dep=yes \
-#     stage2.sh [input.json]
+# Usage, from this directory:
+#   sbatch -A <allocation-id> stage1.sh [input.json]
 #
 # The input defaults to fold_input.json in the directory you submit from.
+#
+# When it starts, the first array task submits stage2.sh with the same input,
+# account and --array, depending on this job with --dependency=aftercorr and
+# --kill-on-invalid-dep=yes, so one sbatch runs both stages. Set RESERVATION to
+# submit stage 2 to a reservation, or AF3_STAGE2=no to submit stage 2 yourself.
+#
+# Both stages are Slurm job arrays with 5 tasks, one per replicate, for
+# averaging running times. Replicate N writes to output/replicate-N/, and
+# --dependency=aftercorr starts stage 2 task N when stage 1 task N succeeds.
+# Each replicate runs the full data pipeline. Submit with --array=1 for a
+# single run.
 #
 # RM-shared (Bridges-2 User Guide): 2 GB of memory per core requested, up to
 # 64 cores on one node, 1-hour default and 72-hour maximum time limit. The 32
@@ -47,14 +57,35 @@ print_elapsed() {
 }
 trap print_elapsed EXIT
 
+# Submit stage 2 once, from the first array task, before the AF3_* variables
+# below are set so they don't leak into its environment. Stage 2 task N starts
+# when stage 1 task N succeeds, and Slurm cancels it if that task fails. Use a
+# range for --array (1-5, 1-5:2, 3); stage 2 gets min-max:step of it.
+if [[ ${AF3_STAGE2:-yes} != no && -n ${SLURM_JOB_ID:-} &&
+      ${SLURM_ARRAY_TASK_ID:-} == "${SLURM_ARRAY_TASK_MIN:-}" ]]; then
+  if [[ -n ${SLURM_ARRAY_JOB_ID:-} ]]; then
+    stage2_deps=(--array="$SLURM_ARRAY_TASK_MIN-$SLURM_ARRAY_TASK_MAX:${SLURM_ARRAY_TASK_STEP:-1}"
+                 --dependency=aftercorr:"$SLURM_ARRAY_JOB_ID")
+  else
+    stage2_deps=(--array=1 --dependency=afterok:"$SLURM_JOB_ID")
+  fi
+  (cd "$SLURM_SUBMIT_DIR" &&
+     sbatch -A "$SLURM_JOB_ACCOUNT" ${RESERVATION:+--reservation="$RESERVATION"} \
+       "${stage2_deps[@]}" --kill-on-invalid-dep=yes stage2.sh "$@") ||
+    echo "Warning: could not submit stage2.sh; submit it yourself." >&2
+fi
+
 # Load the AlphaFold 3 module. It sets AF3_IMAGE, AF3_DATABASES and
 # AF3_WEIGHTS, and defines run_alphafold, which runs run_alphafold.py in the
 # container with /ocean, $PROJECT and $LOCAL bound (and --nv on GPU nodes).
 module load alphafold3/3.0.4 || exit 1
 
-# Results go to output/ in the directory the job was submitted from (the
-# example directory), where stage 2 reads the stage 1 output.
-export AF3_OUTPUT_DIR=${AF3_OUTPUT_DIR:-$SLURM_SUBMIT_DIR/output}
+# Results go to output/replicate-N/ in the directory the job was submitted
+# from (the example directory), where stage 2 reads the stage 1 output. N is
+# the array task ID (1 when the script isn't run as an array). If you set
+# AF3_OUTPUT_DIR, replicate-N/ is created inside it.
+export AF3_REPLICATE=${SLURM_ARRAY_TASK_ID:-1}
+export AF3_OUTPUT_DIR=${AF3_OUTPUT_DIR:-$SLURM_SUBMIT_DIR/output}/replicate-$AF3_REPLICATE
 mkdir -p "$AF3_OUTPUT_DIR"
 
 # Slurm runs a copy of this script, so find files relative to the directory
@@ -71,6 +102,7 @@ print(re.sub(r"[^A-Za-z0-9_.-]", "", name))
 
 data_json="$AF3_OUTPUT_DIR/$AF3_NAME/${AF3_NAME}_data.json"
 
+echo "Replicate: $AF3_REPLICATE"
 echo "Input:  $AF3_INPUT"
 echo "Output: $AF3_OUTPUT_DIR/$AF3_NAME"
 

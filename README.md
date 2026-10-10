@@ -103,11 +103,12 @@ You don't need to download the containers, databases, or weights yourself.
    ```bash
    cd vanilla-examples/example1
    jobid=$(sbatch --parsable -A <allocation-id> stage1.sh)
-   sbatch -A <allocation-id> --dependency=afterok:$jobid --kill-on-invalid-dep=yes stage2.sh
+   sbatch -A <allocation-id> --dependency=aftercorr:$jobid --kill-on-invalid-dep=yes stage2.sh
    ```
 
-3. Watch the jobs with `squeue -u $USER`. Results are written to
-   `output/<name>/` in the example directory.
+3. Watch the jobs with `squeue -u $USER`. Each stage is a job array of 5
+   replicates, for averaging running times. Replicate N writes its results to
+   `output/replicate-N/<name>/` in the example directory.
 
 ## Environment variables
 
@@ -163,8 +164,11 @@ For example, to write the results to a different directory:
 export AF3_OUTPUT_DIR=$PROJECT/af3_output
 cd vanilla-examples/example1
 jobid=$(sbatch --parsable -A <allocation-id> stage1.sh)
-sbatch -A <allocation-id> --dependency=afterok:$jobid --kill-on-invalid-dep=yes stage2.sh
+sbatch -A <allocation-id> --dependency=aftercorr:$jobid --kill-on-invalid-dep=yes stage2.sh
 ```
+
+The example scripts add a `replicate-N/` directory inside `AF3_OUTPUT_DIR`,
+so this writes to `$PROJECT/af3_output/replicate-N/<name>/`.
 
 Clone this repository under `$PROJECT`, not `$HOME`, since results are written
 inside the example directories. Your home directory quota is small.
@@ -295,29 +299,36 @@ From an example directory:
 
 ```bash
 jobid=$(sbatch --parsable -A <allocation-id> stage1.sh)
-sbatch -A <allocation-id> --dependency=afterok:$jobid --kill-on-invalid-dep=yes stage2.sh
+sbatch -A <allocation-id> --dependency=aftercorr:$jobid --kill-on-invalid-dep=yes stage2.sh
 ```
 
 1. `stage1.sh` runs on `RM-shared`. It reads the `name` from the
    input JSON, runs the data pipeline, and copies `<name>/<name>_data.json`
-   from `$LOCAL` to `output/` in the example directory.
-2. `stage2.sh` waits in the queue until stage 1 succeeds
-   (`--dependency=afterok`), then runs on `GPU-shared`. It reads the same
-   input JSON to find `output/<name>/<name>_data.json` and predicts the structure.
+   from `$LOCAL` to `output/replicate-N/` in the example directory.
+2. `stage2.sh` waits in the queue until stage 1 succeeds, then runs on
+   `GPU-shared`. It reads the same input JSON to find
+   `output/replicate-N/<name>/<name>_data.json` and predicts the structure.
 
-If stage 1 fails, `--kill-on-invalid-dep=yes` makes Slurm cancel stage 2, so no
-GPU job runs. `--parsable` makes `sbatch` print only the job ID, which the
+Both scripts are Slurm job arrays (`#SBATCH --array=1-5`) that run 5
+replicates of the example, so you can average the running times. N is the
+array task ID. With `--dependency=aftercorr`, stage 2 task N starts as soon as
+stage 1 task N succeeds. Each replicate runs the full data pipeline. To run
+only once, add `--array=1` to both `sbatch` commands. The logs are
+`af3-data-<jobid>_N.out` and `af3-inference-<jobid>_N.out`.
+
+If a stage 1 task fails, `--kill-on-invalid-dep=yes` makes Slurm cancel the
+matching stage 2 task, so no GPU job runs for that replicate. `--parsable` makes `sbatch` print only the job ID, which the
 second command uses.
 
 To use a different input file, pass it to both scripts:
 
 ```bash
 jobid=$(sbatch --parsable -A <allocation-id> stage1.sh my_input.json)
-sbatch -A <allocation-id> --dependency=afterok:$jobid --kill-on-invalid-dep=yes stage2.sh my_input.json
+sbatch -A <allocation-id> --dependency=aftercorr:$jobid --kill-on-invalid-dep=yes stage2.sh my_input.json
 ```
 
 You can also submit the stages one at a time without `--dependency`: submit
-`stage1.sh`, wait for it to finish, then submit
+`stage1.sh`, wait for all its tasks to finish, then submit
 `stage2.sh`.
 
 ### Stage 1: data pipeline on RM-shared
@@ -330,17 +341,24 @@ You can also submit the stages one at a time without `--dependency`: submit
 #SBATCH --partition=RM-shared
 #SBATCH --ntasks-per-node=32
 #SBATCH --time=12:00:00
-#SBATCH --output=%x-%j.out
+#SBATCH --array=1-5
+#SBATCH --output=%x-%A_%a.out
 
 # Stage 1 of 2: build MSAs and find templates on RM-shared (CPU only).
 # Stage 2 (stage2.sh) runs inference on GPU-shared.
 #
 # Usage, from this directory, submitting stage 2 to start after this succeeds:
 #   jobid=$(sbatch --parsable -A <allocation-id> stage1.sh [input.json])
-#   sbatch -A <allocation-id> --dependency=afterok:$jobid --kill-on-invalid-dep=yes \
+#   sbatch -A <allocation-id> --dependency=aftercorr:$jobid --kill-on-invalid-dep=yes \
 #     stage2.sh [input.json]
 #
 # The input defaults to fold_input.json in the directory you submit from.
+#
+# Both stages are Slurm job arrays with 5 tasks, one per replicate, for
+# averaging running times. Replicate N writes to output/replicate-N/, and
+# --dependency=aftercorr starts stage 2 task N when stage 1 task N succeeds.
+# Each replicate runs the full data pipeline. Submit with --array=1 for a
+# single run.
 #
 # RM-shared (Bridges-2 User Guide): 2 GB of memory per core requested, up to
 # 64 cores on one node, 1-hour default and 72-hour maximum time limit. The 32
@@ -359,9 +377,12 @@ trap print_elapsed EXIT
 # container with /ocean, $PROJECT and $LOCAL bound (and --nv on GPU nodes).
 module load alphafold3/3.0.4 || exit 1
 
-# Results go to output/ in the directory the job was submitted from (the
-# example directory), where stage 2 reads the stage 1 output.
-export AF3_OUTPUT_DIR=${AF3_OUTPUT_DIR:-$SLURM_SUBMIT_DIR/output}
+# Results go to output/replicate-N/ in the directory the job was submitted
+# from (the example directory), where stage 2 reads the stage 1 output. N is
+# the array task ID (1 when the script isn't run as an array). If you set
+# AF3_OUTPUT_DIR, replicate-N/ is created inside it.
+export AF3_REPLICATE=${SLURM_ARRAY_TASK_ID:-1}
+export AF3_OUTPUT_DIR=${AF3_OUTPUT_DIR:-$SLURM_SUBMIT_DIR/output}/replicate-$AF3_REPLICATE
 mkdir -p "$AF3_OUTPUT_DIR"
 
 # Slurm runs a copy of this script, so find files relative to the directory
@@ -378,6 +399,7 @@ print(re.sub(r"[^A-Za-z0-9_.-]", "", name))
 
 data_json="$AF3_OUTPUT_DIR/$AF3_NAME/${AF3_NAME}_data.json"
 
+echo "Replicate: $AF3_REPLICATE"
 echo "Input:  $AF3_INPUT"
 echo "Output: $AF3_OUTPUT_DIR/$AF3_NAME"
 
@@ -451,16 +473,21 @@ slowest. These cover the data pipeline only, not inference.
 #SBATCH --gpus=l40s-48:1
 #SBATCH --ntasks-per-node=5
 #SBATCH --time=02:00:00
-#SBATCH --output=%x-%j.out
+#SBATCH --array=1-5
+#SBATCH --output=%x-%A_%a.out
 
 # Stage 2 of 2: predict the structure from the stage 1 output on one GPU.
 #
 # Usage, from this directory, after stage1.sh finishes (or with
-# --dependency=afterok:<stage 1 job id>, see stage1.sh):
+# --dependency=aftercorr:<stage 1 job id>, see stage1.sh):
 #   sbatch -A <allocation-id> stage2.sh [input.json]
 #
 # Pass the same input as stage 1. It defaults to fold_input.json in the
 # directory you submit from.
+#
+# Like stage 1, this is a job array with 5 tasks: task N predicts from
+# output/replicate-N/ and writes its results there. Use the same --array as
+# stage 1.
 
 # Load the AlphaFold 3 module. It sets AF3_IMAGE, AF3_DATABASES and
 # AF3_WEIGHTS, and defines run_alphafold, which runs run_alphafold.py in the
@@ -477,9 +504,12 @@ print_elapsed() {
 }
 trap print_elapsed EXIT
 
-# Results go to output/ in the directory the job was submitted from (the
-# example directory), where stage 2 reads the stage 1 output.
-export AF3_OUTPUT_DIR=${AF3_OUTPUT_DIR:-$SLURM_SUBMIT_DIR/output}
+# Results go to output/replicate-N/ in the directory the job was submitted
+# from (the example directory), where stage 2 reads the stage 1 output. N is
+# the array task ID (1 when the script isn't run as an array). If you set
+# AF3_OUTPUT_DIR, replicate-N/ is created inside it.
+export AF3_REPLICATE=${SLURM_ARRAY_TASK_ID:-1}
+export AF3_OUTPUT_DIR=${AF3_OUTPUT_DIR:-$SLURM_SUBMIT_DIR/output}/replicate-$AF3_REPLICATE
 mkdir -p "$AF3_OUTPUT_DIR"
 
 # Slurm runs a copy of this script, so find files relative to the directory
@@ -562,19 +592,21 @@ AlphaFold 3 doesn't save checkpoints in the middle of a stage, but each stage's
 output is kept:
 
 - **Inference failed:** the `_data.json` from stage 1 is already in
-  `$AF3_OUTPUT_DIR/<name>/`. Resubmit only stage 2:
+  `output/replicate-N/<name>/`. Resubmit only stage 2 for that replicate,
+  for example replicate 3:
 
   ```bash
   cd vanilla-examples/example1
-  sbatch -A <allocation-id> stage2.sh
+  sbatch -A <allocation-id> --array=3 stage2.sh
   ```
 
-- **Data pipeline failed:** submit both stages again. Stage 1 starts over,
+- **Data pipeline failed:** submit both stages again, with `--array=N` for
+  only the replicates that failed. Stage 1 starts over,
   because the data pipeline saves nothing until it finishes. If it ran out of
   time, increase `--time` in `stage1.sh`.
 
-Submitting `stage1.sh` again after it has finished is also safe: it
-sees the existing `_data.json` and skips the data pipeline.
+Submitting `stage1.sh` again after it has finished is also safe: each
+replicate sees its existing `_data.json` and skips the data pipeline.
 
 ### Useful `run_alphafold.py` flags
 
