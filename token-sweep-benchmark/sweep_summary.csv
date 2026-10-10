@@ -1,0 +1,8 @@
+gpu,tokens,status,n_ok,n_oom,n_other,cold_seconds,warm_seconds,compile_seconds,peak_gpu_mem_mib,gpu_mem_total_mib,a100_official_seconds,h100_official_seconds
+l40s-48,256,ok,5,0,0,56.1,16.4,39.8,,46068,,
+l40s-48,512,ok,5,0,0,73.0,34.3,39.0,,46068,,
+l40s-48,1024,ok,5,0,0,142.2,103.1,39.2,,46068,62,34
+l40s-48,2048,ok,5,0,0,434.9,392.4,42.5,,46068,275,144
+l40s-48,3072,ok,5,0,0,919.9,870.1,44.8,,46068,703,367
+l40s-48,4096,oom,0,5,0,,,,,46068,1434,774
+l40s-48,5120,oom,0,5,0,,,,,46068,2547,1416

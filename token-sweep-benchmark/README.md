@@ -125,6 +125,64 @@ As in `../gpu-benchmarks/`, `sweep.sh` uses XLA attention and adds
 on V100 with unified memory, which is not enabled here, so larger sizes are
 expected to be `oom`.
 
+## Results
+
+So far the sweep has run on the L40S 48GB only: 7 sizes x 5 repeats, 35 jobs.
+Values are medians over the 5 repeats.
+
+| Tokens | Status | Cold (s) | Warm (s) | Compile (s) | DeepMind A100 (s) | DeepMind H100 (s) |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| 256 | ok | 56.1 | 16.4 | 39.8 | | |
+| 512 | ok | 73.0 | 34.3 | 39.0 | | |
+| 1024 | ok | 142.2 | 103.1 | 39.2 | 62 | 34 |
+| 2048 | ok | 434.9 | 392.4 | 42.5 | 275 | 144 |
+| 3072 | ok | 919.9 | 870.1 | 44.8 | 703 | 367 |
+| 4096 | out of memory (5/5) | | | | 1434 | 774 |
+| 5120 | out of memory (5/5) | | | | 2547 | 1416 |
+
+### Inference time vs input size
+
+![Warm inference time vs input size](plots/sweep_runtime.png)
+
+Warm (compile-free) inference time per seed on a log scale. The blue line is
+the L40S; the gray dashed lines are DeepMind's A100 80GB and H100 80GB
+timings from AlphaFold 3's `docs/performance.md`; the blue crosses mark sizes
+that ran out of memory.
+
+- **Time grows much faster than input size.** From 1024 to 2048 tokens warm
+  time rises 3.8x (103 s to 392 s), and from 2048 to 3072 it rises 2.2x
+  (392 s to 870 s), close to the quadratic growth expected from AlphaFold 3's
+  pair representation.
+- **The L40S is slower than both reference GPUs, but the gap narrows with
+  size.** It is 1.7x slower than the A100 at 1024 tokens and 1.2x slower at
+  3072; against the H100 it is 3.0x slower at 1024 and 2.4x slower at 3072.
+- **3072 tokens is the L40S limit with default settings.** All five 4096-token
+  runs failed trying to allocate a single 41.9 GiB buffer, and all five
+  5120-token runs failed allocating 12.5 GiB buffers. The 80 GB A100 and H100
+  handle both sizes. Larger inputs on the L40S need unified memory (see the
+  top-level README) or an 80 GB GPU.
+
+### JAX compilation overhead
+
+![Cold vs warm inference time](plots/sweep_compile.png)
+
+Seed 1 (solid, cold, includes compilation) against seed 2 (dotted, warm) on
+the L40S.
+
+- **Compilation costs a roughly constant 39-45 s** regardless of input size.
+- **It dominates small inputs and is negligible for large ones:** it is 71% of
+  the cold time at 256 tokens, 28% at 1024, and 5% at 3072, which is why the
+  two lines converge on the right.
+- So for small inputs, predicting several seeds (or inputs of the same bucket
+  size) in one job is far cheaper than separate jobs, each of which pays
+  compilation again.
+
+### Peak GPU memory
+
+`plot_sweep.py` also draws `plots/sweep_memory.png` (real peak GPU memory vs
+tokens) once runs have recorded `peak_gpu_mem_mib` (see [GPU memory](#gpu-memory)).
+None of the runs above recorded it, so that plot does not exist yet.
+
 ## Limitations
 
 - No MSA. Real inputs with deep MSAs do extra work in the MSA module, so these

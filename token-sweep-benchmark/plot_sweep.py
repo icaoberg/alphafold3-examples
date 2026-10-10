@@ -12,7 +12,8 @@ Writes:
   plots/sweep_runtime.png  warm inference time vs tokens per GPU, with
                            DeepMind's A100/H100 timings and OOM points
   plots/sweep_compile.png  cold vs warm time, i.e. compilation overhead
-  plots/sweep_memory.png   real peak GPU memory vs tokens (needs -m runs)
+  plots/sweep_memory.png   real peak GPU memory vs tokens (once runs
+                           have recorded peak_gpu_mem_mib)
 """
 
 import csv
@@ -87,7 +88,7 @@ def plot_runtime(data):
     ax.set_ylabel("Warm inference time per seed (s)")
     ax.set_title("AlphaFold 3 inference time vs input size")
     ax.grid(True, which="both", alpha=0.3)
-    ax.legend(fontsize=8)
+    ax.legend(fontsize=8, loc="lower right")
     fig.tight_layout()
     fig.savefig(OUT / "sweep_runtime.png", dpi=200)
     plt.close(fig)
@@ -121,7 +122,7 @@ def plot_memory(data):
     have = any(num(r["peak_gpu_mem_mib"]) for rows in data.values()
                for r in rows)
     if not have:
-        print("No memory-profiling runs yet (submit with -m); "
+        print("No runs with peak_gpu_mem_mib recorded yet; "
               "skipping sweep_memory.png")
         return
     fig, ax = plt.subplots(figsize=(7, 4.5))

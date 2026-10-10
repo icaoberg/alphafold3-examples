@@ -16,18 +16,22 @@
 #   -n  dry run: print the sbatch commands without submitting
 #   size ...  token sizes to run (default: every inputs/tokens*.json)
 #
-# Rounds never overlap, so runs don't share nodes with each other: each round
-# is submitted with a Slurm dependency on every job of the round before it
-# (including jobs of that round already in the queue), so it only starts once
-# the previous round has finished. To queue all five rounds at once:
+# Rounds never overlap on a GPU type, so runs don't share nodes with each
+# other: each round on a GPU type is submitted with a Slurm dependency on every
+# job of the round before it on that GPU type (including jobs already in the
+# queue), so it only starts once the previous round there has finished. GPU
+# types are chained separately, so a slow V100 round doesn't hold up the H100.
+# To queue all five rounds at once:
 #   ./submit_sweep.sh -A <allocation-id> -r 1 -R 5
 #
 # Missing inputs are generated with gen_token_inputs.py.
 #
 # GPUS sets the GPU types (default: v100-32 l40s-48 h100-80).
-# RESERVATION sets the reservation (default: alphafold3), used only for the
-# GPU types listed in RESERVATION_GPUS (default: l40s-48); other GPU types are
-# submitted without a reservation. Set RESERVATION= to never use one.
+# RESERVATIONS maps GPU types to reservations as space-separated <gpu>:<name>
+# pairs (default: v100-32:GPUV100 l40s-48:GPUL40S h100-80:GPUH100). GPU types
+# not listed are submitted without a reservation. Set RESERVATIONS= to never
+# use one. A job's wall time is capped at the time left in its reservation,
+# since Slurm won't start a job that would run past the reservation's end.
 #
 # A run is skipped if it already succeeded or is still queued or running, so
 # the same rounds can be resubmitted to retry failed runs. Runs that ran out of
@@ -36,8 +40,7 @@
 set -euo pipefail
 
 GPUS=${GPUS-"v100-32 l40s-48 h100-80"}
-RESERVATION=${RESERVATION-"alphafold3"}
-RESERVATION_GPUS=${RESERVATION_GPUS-"l40s-48"}
+RESERVATIONS=${RESERVATIONS-"v100-32:GPUV100 l40s-48:GPUL40S h100-80:GPUH100"}
 
 account=""
 first="1"
@@ -86,11 +89,35 @@ else
   sizes=($(ls inputs/tokens*.json | sed 's/.*tokens\([0-9]*\)\.json/\1/' | sort -n))
 fi
 
+# Reservation for a GPU type, or nothing if it has none.
+reservation_for() {
+  local pair
+  for pair in $RESERVATIONS; do
+    if [[ ${pair%%:*} == "$1" ]]; then
+      echo "${pair#*:}"
+      return
+    fi
+  done
+}
+
+# Whole minutes left before the GPU type's reservation ends, or nothing if it
+# has no reservation or its end time can't be read.
+reservation_minutes_left() {
+  local res end
+  res=$(reservation_for "$1")
+  [[ -z "$res" ]] && return
+  end=$(scontrol show reservation "$res" 2>/dev/null \
+        | sed -n 's/.*EndTime=\([^ ]*\).*/\1/p')
+  [[ -z "$end" ]] && return
+  echo $(( ($(date -d "$end" +%s) - $(date +%s)) / 60 - 1 ))
+}
+
 # Wall-time limit for two seeds plus compilation, generous on purpose since
 # L40S is slower than the A100/H100 in DeepMind's tables. V100 runs use the
-# slower XLA attention, so they get twice as long.
+# slower XLA attention, so they get twice as long; H100 runs get half as long.
+# Capped at the time left in the GPU type's reservation.
 walltime() {
-  local n=$1 gpu=$2 minutes
+  local n=$1 gpu=$2 minutes left
   if   (( n <= 1024 )); then minutes=30
   elif (( n <= 2048 )); then minutes=60
   elif (( n <= 3072 )); then minutes=120
@@ -98,6 +125,11 @@ walltime() {
   else                       minutes=240
   fi
   [[ $gpu == v100* ]] && minutes=$((minutes * 2))
+  [[ $gpu == h100* ]] && minutes=$((minutes / 2))
+  left=$(reservation_minutes_left "$gpu")
+  if [[ -n "$left" ]] && (( left > 0 && left < minutes )); then
+    minutes=$left
+  fi
   printf '%02d:%02d:00\n' $((minutes / 60)) $((minutes % 60))
 }
 
@@ -107,28 +139,32 @@ suffix=""
 # "<job id> <job name>" for this user's queued and running jobs.
 queue=$(squeue -u "${USER:-$(whoami)}" -h -o "%i %j" 2>/dev/null || true)
 
-# Job ids of a round's sweep jobs that are already queued or running.
+# Colon-separated job ids of a round's sweep jobs on one GPU type that are
+# already queued or running.
 queued_ids() {
-  local round=$1
-  awk -v re="^af3-sweep-tokens[0-9]+-.*-r${round}${suffix}\$" \
-      '$2 ~ re {print $1}' <<< "$queue"
+  local round=$1 gpu=$2
+  awk -v re="^af3-sweep-tokens[0-9]+-${gpu}-r${round}${suffix}\$" \
+      '$2 ~ re {print $1}' <<< "$queue" | paste -sd: -
 }
 
 fake_id=900000   # job ids shown in dry runs
-prev_ids=()
-if (( first > 1 )); then
-  prev_ids=($(queued_ids $((first - 1))))
-fi
+
+# Per GPU type, the colon-separated job ids of the previous round.
+declare -A prev_ids ids
+for gpu in $GPUS; do
+  prev_ids[$gpu]=""
+  if (( first > 1 )); then
+    prev_ids[$gpu]=$(queued_ids $((first - 1)) "$gpu")
+  fi
+done
 
 for (( round = first; round <= last; round++ )); do
   tag=r$round$suffix
-  ids=($(queued_ids "$round"))   # this round's jobs already in the queue
 
-  dependency=()
-  if (( ${#prev_ids[@]} > 0 )); then
-    dependency=(--dependency="afterany:$(IFS=:; echo "${prev_ids[*]}")")
-    echo "round $round: waits for ${#prev_ids[@]} job(s) of round $((round - 1))"
-  fi
+  # This round's jobs already in the queue, per GPU type.
+  for gpu in $GPUS; do
+    ids[$gpu]=$(queued_ids "$round" "$gpu")
+  done
 
   for n in "${sizes[@]}"; do
     for gpu in $GPUS; do
@@ -148,8 +184,12 @@ for (( round = first; round <= last; round++ )); do
       fi
 
       reservation=()
-      if [[ -n "$RESERVATION" && " $RESERVATION_GPUS " == *" $gpu "* ]]; then
-        reservation=(--reservation="$RESERVATION")
+      res=$(reservation_for "$gpu")
+      [[ -n "$res" ]] && reservation=(--reservation="$res")
+
+      dependency=()
+      if [[ -n "${prev_ids[$gpu]}" ]]; then
+        dependency=(--dependency="afterany:${prev_ids[$gpu]}")
       fi
 
       cmd=(sbatch --parsable -A "$account" "${reservation[@]}"
@@ -166,9 +206,11 @@ for (( round = first; round <= last; round++ )); do
         id=${id%%;*}   # --parsable may print "id;cluster"
         echo "submitted $name: $id"
       fi
-      ids+=("$id")
+      ids[$gpu]=${ids[$gpu]:+${ids[$gpu]}:}$id
     done
   done
 
-  prev_ids=("${ids[@]}")
+  for gpu in $GPUS; do
+    prev_ids[$gpu]=${ids[$gpu]}
+  done
 done
