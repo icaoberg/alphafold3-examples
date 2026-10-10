@@ -38,6 +38,8 @@ OUT = HERE / "plots"
 
 COPY = "#2a78d6"     # categorical slot 1: copying to $LOCAL
 AF3 = "#eb6834"      # categorical slot 2: running AlphaFold 3
+OCEAN = "#0b0b0b"    # databases on Ocean (vanilla-examples): ink, apart from
+                     # blue and orange in lightness as well as hue
 INK = "#0b0b0b"      # text and median marks
 MUTED = "#52514e"    # secondary text
 GRID = "#e4e3df"
@@ -134,14 +136,16 @@ def plot(local, ocean):
 
     # Right: data pipeline time per replicate, local disk vs Ocean.
     for y, n in enumerate(names):
-        for vals, color, dy, label in (
-                (local[n]["alphafold"], AF3, 0.15, "Databases on $LOCAL"),
-                (ocean.get(n, []), MUTED, -0.15,
+        # Shape as well as color, so the series stay apart in grayscale.
+        for vals, color, marker, dy, label in (
+                (local[n]["alphafold"], AF3, "o", 0.18,
+                 "Databases on $LOCAL"),
+                (ocean.get(n, []), OCEAN, "s", -0.18,
                  "Databases on Ocean (vanilla-examples)")):
             if not vals:
                 continue
-            right.plot(vals, [y + dy] * len(vals), "o", ms=6, color=color,
-                       alpha=0.8, mec="white", mew=1,
+            right.plot(vals, [y + dy] * len(vals), marker, ms=7, color=color,
+                       mec="white", mew=1,
                        label=label if y == 0 else None)
             right.plot(statistics.median(vals), y + dy, "|", ms=12, mew=2,
                        color=INK, label="Median" if y == 0 and dy < 0
@@ -180,7 +184,7 @@ def plot_total(total, ocean):
         for vals, color, marker, dy, label in (
                 (total[n], COPY, "o", 0.18,
                  "Local test: copy to $LOCAL + AlphaFold 3"),
-                (ocean.get(n, []), AF3, "s", -0.18,
+                (ocean.get(n, []), OCEAN, "s", -0.18,
                  "vanilla-examples stage 1 (databases on Ocean)")):
             if not vals:
                 continue
