@@ -12,15 +12,15 @@ Submit one round (14 examples × 3 GPUs = 42 jobs), and wait until it finishes
 before submitting the next, so runs don't share nodes with each other:
 
 ```bash
-./submit_all.sh -A <allocation-id> -r 1
+./submit.sh -A <allocation-id> -r 1
 # when round 1 is done (squeue -u $USER is empty):
-./submit_all.sh -A <allocation-id> -r 2
+./submit.sh -A <allocation-id> -r 2
 # ... up to -r 5
 ```
 
 Add `-n` to print the `sbatch` commands without submitting. Pass example
-directories to run only those (`./submit_all.sh -A <id> -r 1 example1`), and
-set `GPUS` to change the GPU types (`GPUS="l40s-48 h100-80" ./submit_all.sh ...`).
+directories to run only those (`./submit.sh -A <id> -r 1 example1`), and
+set `GPUS` to change the GPU types (`GPUS="l40s-48 h100-80" ./submit.sh ...`).
 
 Runs that already succeeded or are still queued are skipped, so running the
 same round again resubmits only the ones that failed.

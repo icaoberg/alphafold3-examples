@@ -29,7 +29,7 @@
 # Stage 2 of 2, GPU benchmark version: predict the structure from the stage 1
 # output on one GPU and log the timings for ../collect_results.py.
 #
-# Usually submitted by ../submit_all.sh, which sets the GPU type, job name and
+# Usually submitted by ../submit.sh, which sets the GPU type, job name and
 # repeat number. To submit one run by hand, from this directory:
 #   AF3_GPU=h100-80 AF3_REPEAT=1 sbatch -A <allocation-id> \
 #     --gpus=h100-80:1 --job-name=af3-s2-example1-h100-80-r1 stage2.sh
