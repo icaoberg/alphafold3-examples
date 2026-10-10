@@ -176,15 +176,16 @@ def plot_total(total, ocean):
     names = sorted(total, key=number, reverse=True)  # example1 at the top
     fig, ax = plt.subplots(figsize=(8.5, 6.6))
     for y, n in enumerate(names):
-        for vals, color, dy, label in (
-                (total[n], COPY, 0.15,
+        # Shape as well as color, so the series stay apart in grayscale.
+        for vals, color, marker, dy, label in (
+                (total[n], COPY, "o", 0.18,
                  "Local test: copy to $LOCAL + AlphaFold 3"),
-                (ocean.get(n, []), MUTED, -0.15,
+                (ocean.get(n, []), AF3, "s", -0.18,
                  "vanilla-examples stage 1 (databases on Ocean)")):
             if not vals:
                 continue
-            ax.plot(vals, [y + dy] * len(vals), "o", ms=6, color=color,
-                    alpha=0.8, mec="white", mew=1,
+            ax.plot(vals, [y + dy] * len(vals), marker, ms=7, color=color,
+                    mec="white", mew=1,
                     label=label if y == 0 else None)
             ax.plot(statistics.median(vals), y + dy, "|", ms=12, mew=2,
                     color=INK, label="Median" if y == 0 and dy < 0 else None)
