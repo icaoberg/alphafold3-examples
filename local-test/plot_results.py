@@ -38,8 +38,7 @@ OUT = HERE / "plots"
 
 COPY = "#2a78d6"     # categorical slot 1: copying to $LOCAL
 AF3 = "#eb6834"      # categorical slot 2: running AlphaFold 3
-OCEAN = "#0b0b0b"    # databases on Ocean (vanilla-examples): ink, apart from
-                     # blue and orange in lightness as well as hue
+OCEAN = AF3          # databases on Ocean (vanilla-examples), drawn as squares
 INK = "#0b0b0b"      # text and median marks
 MUTED = "#52514e"    # secondary text
 GRID = "#e4e3df"
@@ -138,7 +137,7 @@ def plot(local, ocean):
     for y, n in enumerate(names):
         # Shape as well as color, so the series stay apart in grayscale.
         for vals, color, marker, dy, label in (
-                (local[n]["alphafold"], AF3, "o", 0.18,
+                (local[n]["alphafold"], COPY, "o", 0.18,
                  "Databases on $LOCAL"),
                 (ocean.get(n, []), OCEAN, "s", -0.18,
                  "Databases on Ocean (vanilla-examples)")):
