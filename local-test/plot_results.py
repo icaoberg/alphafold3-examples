@@ -161,7 +161,13 @@ def plot(local, ocean):
     fig.suptitle("Local test: copying the databases to $LOCAL first "
                  "(RM-shared, 32 cores, 5 replicates)",
                  x=0.01, ha="left", color=INK, fontsize=12)
-    fig.tight_layout()
+    fig.tight_layout(rect=(0, 0.06, 1, 1))
+    fig.text(0.01, 0.015,
+             "Note: for these small examples, copying the databases to $LOCAL "
+             "cost more time than it saved. That may not hold for real-life "
+             "computations,\nsuch as larger inputs with longer searches, or "
+             "many jobs sharing one copy on the same node.",
+             ha="left", va="bottom", fontsize=9, color=MUTED, style="italic")
     fig.savefig(OUT / "local_vs_ocean.png", dpi=200)
     plt.close(fig)
 
