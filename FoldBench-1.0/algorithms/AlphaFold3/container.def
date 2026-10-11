@@ -1,0 +1,14 @@
+# RECONSTRUCTION: FoldBench does not ship its AlphaFold 3 integration.
+# Builds on the AlphaFold 3 v3.0.4 image used by the vanilla examples on
+# Bridges-2, adding the FoldBench scripts under /algo, where run.sh expects
+# them. The image has no databases or weights; those are bound at run time.
+Bootstrap: localimage
+From: /ocean/containers/alphafold3/singularity-alphafold3-v3.0.4.sif
+
+%files
+    # Copy algorithm-related files to a separate dir /algo.
+    # Don't change the dir name.
+    algorithms/AlphaFold3 /algo
+
+%post
+    chmod +x /algo/make_predictions.sh
